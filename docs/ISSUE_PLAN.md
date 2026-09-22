@@ -1,42 +1,53 @@
 # Issue Plan
 
-The implementation order is intentionally front-loaded with architecture and regression work.
+Slotflow now follows a Calendar-first implementation order.
 
-1. **#1 — MVP roadmap and release contract**  
-   Parent issue / release definition.
+## Product rule
 
-2. **#2 — Audit ContextLab/scheduler before reusing any implementation**  
-   Reproduce known reference-repository failure patterns and record adopt/adapt/reject decisions.
+The store manager operates almost entirely in Google Calendar. Slotflow should first become a clear, always-ready display of that Calendar, then later add customer booking into it.
 
-3. **#3 — Define booking state model and source-of-truth rules**  
-   Freeze Calendar occupancy semantics, ledger states, failure recovery, timezone, business hours and all-day behavior.
+## Order
 
-4. **#4 — Build test harness and CI before calendar implementation**  
-   Regression safety net before production logic.
+1. **#2 — Audit ContextLab/scheduler before reusing any implementation**  
+   Complete. Keep as reference material only.
 
-5. **#5 — Implement Google Calendar + Apps Script booking core**  
-   Depends on #3 and #4.
+2. **#5 — Implement Google Calendar read adapter for the owner dashboard**  
+   Small read path only. No Sheets/state machine.
 
-6. **#6 — Build instant-access Android owner dashboard PWA**  
-   Fixture UI can start early; live integration depends on #5.
+3. **#6 — Build instant-access Android Calendar dashboard PWA**  
+   Can prototype with fixtures immediately; connects to #5.
 
-7. **#7 — Build generic customer booking web flow**  
-   Depends on #5.
+4. **#4 — Add lightweight CI/tests for Calendar read + dashboard**  
+   Runs alongside #5/#6; do not block the read-only milestone on future booking-write architecture.
 
-8. **#8 — Add LINE entry point without requiring a webhook**  
+5. **#3 — Define minimal safeguards for customer booking writes**  
+   Deferred until customer booking is about to be implemented.
+
+6. **#7 — Add minimal customer booking flow that writes to Google Calendar**  
+   Re-check availability, write Calendar event, protect against duplicate writes.
+
+7. **#8 — Add LINE entry point without requiring a webhook**  
    Rich menu / LIFF entry on top of #7.
 
-9. **#9 — Design secure LINE Messaging API webhook path**  
-   Deferred until conversational automation is required; do not block MVP.
+8. **#10 — Plan zero-friction Google onboarding for non-technical store owners**
 
-10. **#10 — Plan zero-friction Google onboarding for non-technical store owners**  
-    Separates pilot deployment from managed SaaS productization.
+9. **#11 — Hardening, quota validation and first-store pilot**
 
-11. **#11 — Hardening, quota validation and first-store pilot**  
-    Depends on the core, owner dashboard and customer flow.
+10. **#9 — Secure conversational LINE webhook**  
+    Deferred until chat automation is actually required.
 
 ## Critical path
 
-`#2 + #3 -> #4 -> #5 -> (#6 + #7) -> #8 -> #11`
+First useful product:
 
-`#9` and the managed-service portion of `#10` are not required to prove the first-store workflow.
+`#5 + #6 + lightweight #4`
+
+Then customer booking:
+
+`#3 -> #7 -> #8`
+
+Then productization/pilot:
+
+`#10 -> #11`
+
+The first useful product does **not** depend on a booking ledger, transaction state machine or LINE integration.
