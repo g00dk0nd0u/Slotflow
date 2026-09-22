@@ -1,86 +1,86 @@
 # Slotflow Roadmap
 
-## Phase 0 — freeze the foundation
+## Phase 0 — foundation audit
 
-Issues: #2, #3, #4
+Issue: #2
 
-- Audit `ContextLab/scheduler` and capture adopt/adapt/reject decisions.
-- Freeze Calendar/ledger responsibilities and booking state transitions.
-- Define business-hours, timezone, all-day-event and manual-Calendar semantics.
-- Build regression tests and CI **before** adapting booking logic.
+- Audit the closest reference implementation.
+- Record useful and dangerous patterns.
 
-Exit condition: expected behavior is testable and no core design question is hidden inside implementation.
+Status: **complete**.
 
-## Phase 1 — calendar booking core
+The audit remains reference material. It must not force Slotflow to inherit complexity that the product does not need yet.
 
-Issue: #5
+## Phase 1 — Calendar companion
 
-- Google Apps Script API for the first-store pilot.
-- Configurable weekly business hours.
-- Calendar occupancy read.
-- Appointment create / cancel / reschedule.
-- Lock + idempotency + pending/confirmed ledger state.
-- Recovery/reconciliation for cross-system failures.
+Issues: #5, #6, #4
 
-Exit condition: concurrency and partial-failure tests pass.
+Build the first actually useful product:
 
-## Phase 2 — owner tablet
+- read the manager's Google Calendar;
+- normalize today's/upcoming events;
+- show next appointment, today's schedule and free gaps;
+- run as an instant-access Android PWA;
+- cache the last successful schedule for immediate first paint;
+- refresh in the background;
+- add lightweight regression tests/CI for this read/display path.
 
-Issue: #6
+No Sheets ledger or booking lifecycle state machine is required.
 
-- Android-first installable PWA.
-- Immediate cached view of next appointment / today / free gaps.
-- Background live refresh and clear stale/offline state.
-- Direct resume to schedule with no landing/menu step.
-- Optional keep-screen-awake operation.
+Exit condition: the manager can continue operating in Google Calendar and use Slotflow only as a clearer always-ready display.
 
-Exit condition: the owner can use the tablet by glancing at it rather than opening an application.
+## Phase 2 — customer booking into Calendar
 
-## Phase 3 — customer booking
+Issues: #3, #7
 
-Issue: #7
+Only after Phase 1 is useful:
 
-- Generic service/duration configuration.
-- Available-slot selection.
-- Minimal customer details.
-- Atomic confirmation with idempotent retry.
-- Cancellation and rescheduling.
+- define the minimum write safeguards;
+- calculate customer-bookable time from business hours minus Calendar occupancy;
+- re-check before confirmation;
+- create the appointment directly in Google Calendar;
+- protect against duplicate writes/retries;
+- return clear success/failure.
 
-Exit condition: mobile customer flow works independently of LINE.
+Do not add a second booking database unless a concrete requirement proves necessary.
 
-## Phase 4 — Japan customer entry
+Exit condition: a customer can book from mobile and the resulting event appears in Google Calendar, after which normal manager operation continues there.
+
+## Phase 3 — LINE entry
 
 Issue: #8
 
 - LINE Official Account rich menu/profile link.
-- Booking page/LIFF launch in one tap.
+- Open the booking page/LIFF in one tap.
 - No webhook required for the first release.
 
-Issue #9 is deliberately separate: conversational Messaging API automation is added only when its value justifies a header-capable webhook endpoint.
+Issue #9 remains deferred until conversational automation is genuinely required.
 
-## Phase 5 — onboarding/productization
+## Phase 4 — onboarding/productization
 
 Issue: #10
 
-- Separate developer-assisted first-store deployment from managed SaaS architecture.
-- Target owner UX: Google sign-in/consent + calendar selection only.
-- Plan OAuth verification, secure refresh-token storage and disconnect/revoke path.
+- Keep developer-assisted pilot setup separate from managed SaaS onboarding.
+- Target owner experience: Google sign-in/consent + calendar selection only.
 
-## Phase 6 — hardening and pilot
+## Phase 5 — hardening and first-store pilot
 
 Issue: #11
 
-- Apps Script/Calendar/Sheets quota checks.
-- Security review and secret handling.
-- Failure injection/recovery drills.
+- Calendar/API quota checks.
+- Offline/stale dashboard behavior.
+- Security review for any customer write endpoint.
 - First real single-store pilot.
-- Measure dashboard startup/resume experience and operational friction.
+- Measure whether the manager ever needs to maintain anything outside Google Calendar for routine schedule operation.
 
 ## Deferred until evidence requires it
 
-- telephone integration (explicitly dropped)
-- multi-location / franchise
+- mandatory Google Sheets booking ledger
+- large distributed booking state machine
+- owner-side duplicate booking CRUD
+- conversational LINE bot infrastructure
+- telephone integration
+- multi-location/franchise
 - multi-staff resource scheduling
 - payment/POS/inventory/payroll/full CRM
 - Instagram integration
-- conversational LINE bot infrastructure
