@@ -30,6 +30,7 @@ Start here:
 - [Architecture](docs/ARCHITECTURE.md)
 - [Architecture decisions](docs/DECISIONS.md)
 - [Reference repository audit](docs/REFERENCE_AUDIT.md)
+- [Test strategy](docs/TEST_STRATEGY.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Issue plan](docs/ISSUE_PLAN.md)
 - [MVP roadmap issue #1](https://github.com/g00dk0nd0u/Slotflow/issues/1)
