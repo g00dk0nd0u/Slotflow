@@ -1,158 +1,187 @@
 # Slotflow Architecture
 
-## Goal
+## North star
 
-Slotflow is a lightweight appointment scheduling system for small businesses. The first target is **one owner / one location**, while keeping the domain generic enough for salons, studios, clinics, lessons, consulting, repair services, and other appointment-based businesses.
+The store manager operates the schedule primarily in **Google Calendar**. Slotflow is a thin companion layer, not a replacement calendar or a second owner-side booking system.
 
-The product is Japan-first: **Google Calendar for the owner's operational schedule, Android tablet for instant visibility, and LINE for the customer entry point.**
+The core product idea is intentionally simple:
 
-## Product principles
+1. Read Google Calendar.
+2. Present the schedule clearly on a dedicated Android tablet.
+3. Later, allow customers to create appointments from Web/LINE by writing them into Google Calendar.
 
-1. **Startup is a feature.** The owner should glance at a dedicated Android tablet and immediately see the next booking; opening/navigating an app should not be part of routine operation.
-2. **Use familiar tools.** Manual appointments created directly in Google Calendar (including by Google/Gemini voice interaction) must coexist with Slotflow bookings.
-3. **Correctness before convenience.** Never confirm two customers into the same slot, and never hide partial failures.
-4. **Single owner / single location first.** Do not pay multi-tenant or franchise complexity before the first-store workflow is proven.
-5. **Generic scheduling domain.** Service names, durations and buffers are configuration, not salon-specific code.
-6. **Near-zero-cost pilot where practical.** GitHub Pages + Google Apps Script + Google Sheets are acceptable for the pilot, but security requirements can override the zero-cost preference.
-7. **Reference repositories are patterns, not dependencies.** Every adopted behavior must have a Slotflow regression test.
+## Owner workflow
 
-## Responsibility model
+Normal store operations stay in Google Calendar:
 
-Slotflow deliberately avoids claiming that one store is the source of truth for every concern.
+- create an appointment
+- move an appointment
+- delete/cancel an appointment
+- block time
+- add an all-day closure
+- use ordinary Google/Gemini voice workflows
 
-### Google Calendar — operational occupancy authority
+Slotflow does not require the manager to repeat those actions elsewhere.
 
-Google Calendar determines whether the owner is busy. This includes:
+When a Calendar event changes, Slotflow should reflect the new Calendar state on the next refresh.
 
-- Slotflow-created appointments
-- appointments/events entered manually by the owner
-- events created through Google/Gemini voice workflows
-- configured conflict calendars
-- store-closure/all-day busy events according to Slotflow rules
+## Source of truth
 
-A manual Calendar event does **not** need a Slotflow ledger row to block a customer slot.
+### Google Calendar — operational schedule
 
-### Slotflow ledger — transaction/lifecycle authority
+Google Calendar is the operational source of truth for the store schedule.
 
-Google Sheets is the MVP ledger for Slotflow-originated booking metadata:
+This includes:
 
-- booking/idempotency key
-- booking state
-- Calendar event ID
-- service/duration
-- customer identity/contact references
-- created/updated timestamps
-- cancellation/reschedule links/tokens where used
-- recovery/error state
+- appointments entered by the manager
+- events created through Google/Gemini
+- future customer bookings created by Slotflow
+- manual blocks
+- closures/all-day events
 
-The ledger exists to close Calendar read-after-write gaps, make retries idempotent, and recover from partial failures. It is not a replacement calendar.
+A moved or deleted event in Google Calendar is not treated as drift that Slotflow should undo. It is the manager's real schedule.
 
-### Business hours — base availability
+### Slotflow — presentation and customer entry
 
-Bookable time starts from configured weekly business hours and exceptions. Busy Calendar intervals are subtracted from those hours.
+Slotflow owns presentation logic and, later, the customer booking entry path.
 
-Slotflow does **not** require owners to create specially named "availability events" in Google Calendar.
+It does not need a parallel owner-side booking database for the first milestone.
 
-## Booking transaction model
+### Business hours
 
-Exact implementation is finalized in issue #3, but the intended pattern is:
+Configured business hours are useful for calculating free gaps and, later, customer-bookable times. They do not replace Calendar occupancy.
+
+## First useful milestone — read-only Calendar companion
 
 ```text
-request
-  -> validate input / idempotency key
-  -> acquire booking lock
-  -> check active pending/confirmed ledger conflicts
-  -> read Calendar occupancy
-  -> if free, write pending ledger state
-  -> create Calendar event
-  -> mark ledger confirmed
-  -> release lock
+Google Calendar
+      |
+      v
+Calendar read adapter / small API
+      |
+      v
+Android tablet PWA
 ```
 
-Any failure after a mutation must leave an explicit recoverable state. Silent semantic fallback is not acceptable.
+The first working product needs only:
 
-Cancellation and rescheduling must follow the same principle: a Calendar failure must not be reported as a clean success simply because the ledger changed.
+- Calendar event retrieval
+- event normalization
+- next appointment
+- today's schedule
+- free gaps / next available gap
+- immediate cached first paint
+- background refresh
+- clear stale/offline indication
 
-## Time model
+### Explicitly not required yet
 
-- Store timezone is explicit IANA timezone configuration (`Asia/Tokyo` for the first pilot).
-- Internal API timestamps are unambiguous ISO 8601 instants.
-- Device timezone must not silently change store scheduling behavior.
-- All-day busy events are treated as a product decision, not automatically ignored.
-- Tests cover DST-capable zones even if the first store is in Japan.
+- Google Sheets booking ledger
+- pending/confirmed/recovery lifecycle states
+- LockService booking transactions
+- owner-side create/edit/delete UI
+- Calendar/ledger reconciliation
+- LINE webhook infrastructure
 
-## Runtime architecture — pilot
+## Android tablet
 
-```text
-Customer
-  |
-  +-- LINE Official Account rich menu / link
-  |          |
-  |          +-- optional LIFF context
-  |
-  +-- normal mobile browser
-             |
-             v
-      GitHub Pages / static web UI
-             |
-             v
-      Google Apps Script API
-          |             |
-          |             +-- Google Sheets ledger
-          |
-          +---------------- Google Calendar
+The tablet is a **glanceable display surface**.
 
-Store owner
-  |
-  +-- dedicated Android tablet PWA (always-ready dashboard)
-  |
-  +-- Google Calendar / optional Gemini voice entry
-```
-
-## LINE integration boundary
-
-The first LINE integration does **not** require a webhook: a LINE rich menu can link directly to the booking page/LIFF entry point.
-
-Conversational Messaging API automation is a later concern. LINE requires validating the raw request body against the `x-line-signature` request header before processing webhook events. Apps Script web-app `doPost(e)` does not expose arbitrary request headers in its documented event object, so GAS must not be treated as the direct trusted terminus for a secure LINE Messaging API webhook. Issue #9 evaluates a minimal header-capable edge endpoint if chat automation becomes necessary.
-
-## Owner dashboard
-
-The Android PWA must optimize for glanceability and resume behavior rather than application navigation.
+It is not the manager's primary schedule-editing interface.
 
 First view:
 
 - current date/time
-- **next appointment**
+- next appointment emphasized
 - today's appointments
-- free gaps / next available slot
+- free gaps / next available gap
 
-The last successful schedule should be cached for immediate first paint, then refreshed in the background. Stale/offline state must be obvious.
+UX rules:
+
+- no landing page
+- no dashboard menu before the schedule
+- resume directly to the schedule
+- cached view appears immediately
+- live Calendar data refreshes in the background
+- stale/offline state is visible
+- optional keep-screen-awake mode for a dedicated tablet
+
+## Calendar semantics
+
+- Store timezone is explicit, initially `Asia/Tokyo`.
+- API timestamps are unambiguous ISO 8601 instants.
+- Timed opaque events occupy time.
+- Cancelled events do not occupy time.
+- Opaque all-day events close their covered store-local dates.
+- Required Calendar-read failure is not interpreted as an empty/free schedule.
+
+Detailed edge cases remain covered by the reference audit and test strategy, but they must not inflate the first product into a second scheduling system.
+
+## Later customer booking
+
+After the Calendar read/dashboard path is useful, add the customer flow:
+
+```text
+LINE / Web
+    |
+    v
+Slotflow booking UI
+    |
+    v
+minimal booking endpoint
+    |
+    v
+Google Calendar
+```
+
+Customer booking should:
+
+1. derive bookable time from business hours minus current Calendar occupancy;
+2. re-check the slot immediately before confirmation;
+3. create the appointment in Google Calendar;
+4. return a clear success/failure result.
+
+After creation, ordinary manager edits continue to happen in Google Calendar and Slotflow reflects them.
+
+### Minimum write safeguards
+
+Only when customer writes are introduced, add the minimum mechanisms required for:
+
+- concurrent double-booking prevention
+- idempotent retry/double tap
+- server-authoritative service duration/rules
+- no false success when Calendar creation fails
+
+Google Sheets may be added later if a concrete requirement for idempotency/customer metadata cannot be met more simply. It is not an architectural prerequisite for the read-only owner dashboard.
+
+## LINE
+
+The first LINE integration should remain simple: a LINE Official Account rich-menu/profile link opens the booking page or LIFF entry.
+
+A conversational Messaging API bot is a separate later decision and must not block the Calendar-first product.
 
 ## Deployment stages
 
-### Stage A — first-store / OSS pilot
+### Stage A — Calendar companion
 
-Developer-assisted configuration is acceptable to validate the workflow cheaply.
+Developer-assisted setup is acceptable. Prove that Calendar changes appear clearly and quickly on the Android tablet.
 
-### Stage B — managed service
+### Stage B — customer booking
 
-A non-technical store owner should only need to sign in with their Google account, grant the minimum required Calendar permission, and select a calendar. They should not create OAuth credentials, deploy Apps Script, edit Script Properties, or manage API secrets. This requires a separate productization decision (#10), including Google OAuth verification and secure refresh-token storage.
+Add the minimal safe write path into Google Calendar.
 
-## MVP scope
+### Stage C — productized onboarding
 
-1. Reference audit and regression tests.
-2. Booking state/consistency model.
-3. Google Calendar + ledger core with create/cancel/reschedule.
-4. Instant-access Android owner dashboard.
-5. Generic customer web booking flow.
-6. LINE entry point without a mandatory webhook.
-7. First-store hardening/pilot.
+Reduce setup for a non-technical owner to Google sign-in/consent + calendar selection. The owner should not create OAuth credentials, deploy scripts or manage secrets.
 
-## Explicit non-goals for the first release
+## Non-goals for the first milestone
 
+- replacing Google Calendar
+- owner-side duplicate booking CRUD
+- mandatory Sheets ledger
+- distributed booking state machine
+- multi-location/franchise
+- multi-staff resource scheduling unless later required
+- payment/POS/inventory/payroll/full CRM
 - telephone integration
-- multi-location/franchise management
-- multi-staff resource scheduling unless later proven necessary
-- POS, payment, inventory, payroll, or broad CRM
-- conversational LINE bot infrastructure before it is needed
-- Instagram integration before the LINE/customer booking path is proven
+- conversational LINE bot infrastructure
