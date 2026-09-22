@@ -1,44 +1,86 @@
 # Slotflow Roadmap
 
-## Phase 0 — Validate the foundation
+## Phase 0 — freeze the foundation
 
-- Audit `ContextLab/scheduler` and other relevant open-source schedulers.
-- Define Slotflow's source of truth and consistency model.
-- Define timezone handling, booking state model, and failure recovery.
-- Establish automated tests before adapting reference logic.
+Issues: #2, #3, #4
 
-## Phase 1 — Calendar core
+- Audit `ContextLab/scheduler` and capture adopt/adapt/reject decisions.
+- Freeze Calendar/ledger responsibilities and booking state transitions.
+- Define business-hours, timezone, all-day-event and manual-Calendar semantics.
+- Build regression tests and CI **before** adapting booking logic.
 
-- Google Apps Script API skeleton.
-- Google Calendar availability read.
+Exit condition: expected behavior is testable and no core design question is hidden inside implementation.
+
+## Phase 1 — calendar booking core
+
+Issue: #5
+
+- Google Apps Script API for the first-store pilot.
+- Configurable weekly business hours.
+- Calendar occupancy read.
 - Appointment create / cancel / reschedule.
-- Concurrency-safe double-booking protection.
-- Minimal booking metadata store and reconciliation.
+- Lock + idempotency + pending/confirmed ledger state.
+- Recovery/reconciliation for cross-system failures.
 
-## Phase 2 — Owner tablet dashboard
+Exit condition: concurrency and partial-failure tests pass.
 
-- Android-first responsive PWA.
-- Immediate view: current time, next appointment, today's appointments, free gaps.
-- Fast refresh and resilient read-only fallback.
-- Home-screen install and always-on operation.
+## Phase 2 — owner tablet
 
-## Phase 3 — Customer booking web flow
+Issue: #6
 
-- Service / duration selection.
-- Available slot selection.
-- Customer details.
-- Confirmation, cancellation, and rescheduling.
+- Android-first installable PWA.
+- Immediate cached view of next appointment / today / free gaps.
+- Background live refresh and clear stale/offline state.
+- Direct resume to schedule with no landing/menu step.
+- Optional keep-screen-awake operation.
 
-## Phase 4 — LINE
+Exit condition: the owner can use the tablet by glancing at it rather than opening an application.
 
-- LINE Official Account webhook integration.
-- Messaging API responses.
-- LIFF booking entry point where it improves UX.
-- Signature verification and account/store mapping.
+## Phase 3 — customer booking
 
-## Phase 5 — Hardening
+Issue: #7
 
-- Quota and load testing.
-- Security review.
-- Failure injection and recovery tests.
-- Operational documentation and simple setup flow for non-technical store owners.
+- Generic service/duration configuration.
+- Available-slot selection.
+- Minimal customer details.
+- Atomic confirmation with idempotent retry.
+- Cancellation and rescheduling.
+
+Exit condition: mobile customer flow works independently of LINE.
+
+## Phase 4 — Japan customer entry
+
+Issue: #8
+
+- LINE Official Account rich menu/profile link.
+- Booking page/LIFF launch in one tap.
+- No webhook required for the first release.
+
+Issue #9 is deliberately separate: conversational Messaging API automation is added only when its value justifies a header-capable webhook endpoint.
+
+## Phase 5 — onboarding/productization
+
+Issue: #10
+
+- Separate developer-assisted first-store deployment from managed SaaS architecture.
+- Target owner UX: Google sign-in/consent + calendar selection only.
+- Plan OAuth verification, secure refresh-token storage and disconnect/revoke path.
+
+## Phase 6 — hardening and pilot
+
+Issue: #11
+
+- Apps Script/Calendar/Sheets quota checks.
+- Security review and secret handling.
+- Failure injection/recovery drills.
+- First real single-store pilot.
+- Measure dashboard startup/resume experience and operational friction.
+
+## Deferred until evidence requires it
+
+- telephone integration (explicitly dropped)
+- multi-location / franchise
+- multi-staff resource scheduling
+- payment/POS/inventory/payroll/full CRM
+- Instagram integration
+- conversational LINE bot infrastructure
