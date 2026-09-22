@@ -1,151 +1,345 @@
-# Reference Repository Audit
+# ContextLab/scheduler source audit
 
-Primary reference: `ContextLab/scheduler`
+Reference: [`ContextLab/scheduler`](https://github.com/ContextLab/scheduler)<br>
+Audited `main`: [`c92dec793039fa5a365162029041bdbd26088901`](https://github.com/ContextLab/scheduler/tree/c92dec793039fa5a365162029041bdbd26088901) (2026-08-16)<br>
+History specifically inspected: `c92dec7` (Advanced Calendar service declaration) and
+`883880e` (maintenance credential transport), plus the booking, reconciliation,
+reschedule, rate-limit and free/busy changes leading to the audited revision.
 
-Audit baseline: `c92dec793039fa5a365162029041bdbd26088901` (2026-08-16).
+This is a source and history audit, not an endorsement and not a proposal to copy the
+project. Findings below are based on code paths, tests, manifest/workflows, and diffs,
+not README claims. Provider behavior which a local mock cannot prove is called out as an
+integration-test obligation.
 
-## Conclusion
+## Verdict vocabulary
 
-The repository is valuable as a compact example of **GitHub Pages + Google Apps Script + Google Calendar + Google Sheets**, but it should not be forked wholesale for Slotflow. Its recent history and current code expose several correctness/security behaviors that are acceptable for its own use case but unsafe to inherit without explicit decisions and regression tests.
+- **ADOPT**: retain the idea, with an independent Slotflow test.
+- **ADAPT**: useful idea, but its contract or implementation must change.
+- **REJECT**: the observed behavior must not enter Slotflow.
 
-Use the labels below:
+## Executive decision table
 
-- **ADOPT** — pattern is suitable with independent Slotflow tests.
-- **ADAPT** — useful idea, but Slotflow needs different semantics.
-- **REJECT** — do not carry the behavior forward.
+| Reference pattern or behavior | Decision | Slotflow rule | Required regression |
+|---|---|---|---|
+| Static client + Apps Script for a one-store pilot | **ADAPT** | Accept the cost profile, not the reference security/transaction model | deployed-origin and real-service smoke tests |
+| Specially titled Calendar events define availability | **REJECT** | Expand configured business hours, then subtract busy intervals | ordinary manual events block; overlapping base windows cannot duplicate slots |
+| Advanced Calendar API for event status/transparency | **ADAPT** | Declare the service and fail closed if semantics cannot be preserved | missing service cannot silently change results |
+| Opaque timed events block; transparent events do not | **ADOPT** | Apply consistently on every configured conflict calendar | opaque/transparent matrix |
+| Ignore every all-day event | **REJECT** | Opaque all-day event on an occupancy calendar closes its covered local dates | one-day and multi-day closures |
+| Script lock plus ledger overlap check | **ADAPT** | Lock the whole conflict-check/intent/create/finalize section; use explicit states | two truly concurrent executions |
+| Final booking rows bridge Calendar read lag | **ADAPT** | Include pending and recovery states, idempotency key, and flush/read-back rules | Calendar lag and retry injection |
+| Reschedule checks the old event, then deletes it first | **REJECT** | A booking must not conflict with itself; preserve the old durable booking until replacement is recoverable | self-overlap/same/adjacent/third-party conflict and every failure boundary |
+| Continue cancellation after Calendar delete error | **REJECT** | Never return `cancelled` while an opaque old event may remain | deletion error yields recovery state/non-success |
+| Conservative missing-event reconciliation | **ADAPT** | Reconcile both directions and distinguish absence from provider uncertainty | stale, orphaned, moved and transient-error cases |
+| Expiring management tokens | **ADAPT** | CSPRNG, hashed at rest, purpose-bound, expiring and revocable | entropy/expiry/purpose/replay tests |
+| CacheService request counters | **ADAPT** | Abuse friction only, never authorization or booking integrity | cache miss/eviction/race/bypass tests |
+| Scheduled maintenance uses POST, but manual GET still accepts `key` | **REJECT** the GET route; **ADOPT** no secrets in URLs | Maintenance mutations accept no credential in a URL/query parameter | GET/query route rejection, URL/log leakage, invalid-secret rejection |
+| CORS/origin parameter as protection | **REJECT** | Browser origin policy is not caller authorization | direct non-browser request reaches only public contract |
+| Secret scanning workflow | **ADOPT** | Keep it alongside, not instead of, functional CI | seeded canary fixture is detected |
 
-## Findings
+## 1. Availability calculation
 
-### 1. Advanced Calendar Service silently degraded before the latest fix — ADAPT
+### Observed algorithm
 
-Latest commit `c92dec7` fixed a missing Advanced Calendar Service declaration. Before that, `Calendar.Events.list` raised `Calendar is not defined`; the implementation caught the error and silently fell back to `CalendarApp`.
+The reference begins with positive Calendar “availability” events selected by title,
+then subtracts conflicting events. That model is visible in
+[`backend/Calendar.gs`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Calendar.gs)
+and its test fixtures. Slotflow's base is instead configured weekly business hours plus
+dated exceptions. Requiring synthetic Calendar windows adds owner work and makes a title
+part of an integrity contract. **REJECT**.
 
-The fallback cannot provide the same transparency information, so behavior changed rather than simply becoming slower.
+Timed opaque events are treated as busy and transparent events as free when the Advanced
+Calendar service path is available. Cancelled events are excluded. Declined-event logic
+depends on attendee response information and must be verified against the configured
+calendar/account, not inferred merely from event presence. All-day events are deliberately
+discarded by both implementation and tests. Busy overlaps are handled during interval
+subtraction, but the positive availability-event list is iterated without first merging
+overlapping windows and emitted slots are not deduplicated. Two overlapping positive
+windows can therefore emit the same or overlapping candidate slots. Arbitrary service
+duration/buffer boundaries are also not established strongly enough for Slotflow's generic
+service contract. **ADOPT** interval subtraction; **ADAPT** classification; **REJECT**
+unnormalized base windows and ignoring all-day events.
 
-**Slotflow rule:** do not silently fall back to a semantically different availability engine. Fail visibly or use an explicitly tested equivalent path.
+Slotflow's classification contract should be:
 
-### 2. Maintenance secret was previously sent in a URL — ADOPT the lesson, not the mechanism
+1. Start with store-local business-hour windows.
+2. Union occupied intervals from every explicitly configured conflict calendar.
+3. Ignore cancelled events and timed events explicitly marked transparent.
+4. Treat an opaque all-day event as busy for `[start.date, end.date)` in the store timezone.
+5. Treat a declined event as non-blocking only when the resource owner's own response is
+   unambiguously declined; ambiguous/missing attendee identity fails closed.
+6. Merge overlapping/touching occupied intervals before testing a candidate whose occupied
+   span includes pre/post buffers.
+7. Have Issue #3 explicitly define the min-notice and max-advance boundaries, including
+   whether pre/post buffers participate. Enforce the chosen rule server-side and cover its
+   exact boundaries with regression tests; this audit intentionally chooses no interpretation.
 
-Commit `883880e` moved the cleanup/reconcile secret from a GET query parameter into the POST body because URLs can appear in logs and redirects.
+Multiple-calendar behavior must not be an accidental loop: partial failure reading any
+required conflict calendar makes availability unknown (fail closed), rather than treating
+the unread calendar as empty. Manual owner-created opaque events then block immediately
+without needing ledger rows. **ADAPT**, with provider integration tests.
 
-**Slotflow rule:** secrets never appear in URLs, static client code, or logs. Public maintenance endpoints should be minimized.
+### Configuration and time defects
 
-### 3. Claimed CORS validation is not actually enforcement — REJECT
+[`backend/Calendar.gs`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Calendar.gs)
+contains `parseInt(Config.get('MIN_NOTICE_HOURS'), 10) || 12`; a configured numeric zero is
+falsy and becomes 12. The test configuration contains `MIN_NOTICE_HOURS: '0'`, but its
+future-dated cases do not exercise the notice boundary, so they do not catch the defect.
+**REJECT**. Parse, validate finite/range, then default only when missing/invalid.
 
-`backend/Code.gs` declares `origin` and `allowedOrigin` at the top of `doPost`, but the variables are not used to reject requests. The `origin` value is also read from request parameters rather than an HTTP request header.
+The reference passes JavaScript `Date` values through browser, Apps Script, Calendar and
+sheet representations. That is not sufficient evidence for device/store timezone
+separation or DST correctness. Slotflow APIs accept ISO 8601 instants with offsets/`Z`,
+store an explicit IANA store zone, and expand civil business hours in that zone. Test a
+spring gap and autumn fold in a DST zone even though the pilot is `Asia/Tokyo`. **ADAPT**.
 
-**Slotflow rule:** CORS is not authentication. Do not describe a client-supplied parameter as origin validation, and do not use origin checks as booking authorization.
+Frontend and backend defaults represent another authority split: client-side duration,
+notice or horizon values can drift from enforcement. UI values are hints only; backend
+configuration is authoritative and responses should include a configuration version where
+the UI needs matching display behavior. **REJECT** duplicated enforcement defaults.
 
-### 4. `MIN_NOTICE_HOURS = 0` does not work as configured — REJECT
+This is not only configuration drift. In
+[`handleCreateBooking()` and `handleRescheduleBooking()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs),
+the mutation payload supplies timestamps and booking fields such as meeting type identity/name,
+format and location. The create path checks the requested range for availability, but does
+not independently prove that its length matches the configured meeting type. The reschedule
+path accepts `newStart`/`newEnd` rather than deriving the end from the original service
+duration. Consequently, a direct caller is not constrained by the duration list returned by
+the availability endpoint. **REJECT** frontend-generated slots as authority. Slotflow's
+mutation handler must resolve the service server-side and independently derive or validate
+duration, buffers, notice, horizon, format/location policy and all other integrity fields.
 
-`Calendar.gs` uses:
+## 2. Booking integrity and mutation traces
 
-```js
-parseInt(Config.get('MIN_NOTICE_HOURS'), 10) || 12
-```
+The reference's important improvement is recognizing that a fresh Calendar write may not
+immediately appear in a subsequent availability read. The booking handler takes
+`LockService` and consults Sheets for overlapping bookings. This reduces a known
+double-booking window, but a final-row-only ledger is not a transaction protocol.
+`SpreadsheetApp.flush()` only applies pending spreadsheet changes; it does not make a
+Calendar write and a Sheet write atomic, guarantee another execution's view, or repair a
+failed call. **ADAPT**.
 
-Therefore numeric `0` becomes the default `12`. The test harness itself supplies `MIN_NOTICE_HOURS: '0'`, but its test windows are far enough in the future that this regression is not detected.
+Slotflow must require a caller-supplied idempotency key scoped to operation and principal.
+The same key plus the same canonical payload returns the prior outcome; the same key with a
+different payload is rejected. A random booking/management token is not a substitute.
 
-**Slotflow rule:** zero is a valid value where the configuration permits it; distinguish `NaN`/missing from `0`.
+### Create, observed order: Calendar create → Sheet append → notification
 
-### 5. All-day busy events are intentionally ignored — ADAPT
+| Failure boundary | Reference outcome | Risk / Slotflow decision |
+|---|---|---|
+| before Calendar create | no mutation | Safe only if no success is returned |
+| Calendar create succeeds, Sheet append/flush fails | orphan opaque event | Availability is blocked but retry can create another event; **REJECT** |
+| Sheet append succeeds | confirmed row exists | There was no prior durable intent; recovery of the preceding boundary is weak; **ADAPT** |
+| email fails after both durable writes | booking remains booked; notification may be absent | Correct booking result must be distinct from notification status; retry notification by outbox/idempotent job; **ADAPT** |
 
-Both implementation and tests explicitly ignore all-day events as neither availability nor busy time.
+Slotflow should durably write a pending intent under the lock before Calendar creation,
+then finalize with the event ID. Calendar failure leaves an explicit failed/retryable state;
+final Sheet failure leaves `confirmation_pending`/`recovery_needed`, not a fabricated
+failure that encourages a duplicate retry. The exact state machine remains Issue #3.
 
-For an appointment business, an all-day event such as `休業`, `出張`, or `休暇` may need to block the entire day.
+### Cancel, observed order: Calendar delete attempt → ledger cancel → email/result
 
-**Slotflow rule:** define all-day semantics explicitly. On configured occupancy calendars, opaque all-day closures should be testable as blocking events.
+[`backend/Code.gs`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs)
+catches/logs deletion failure and continues to mark the row cancelled, notify, and return
+success. The durable Calendar may still block the slot while the customer is told it does
+not. **REJECT**. Deletion not-found, transient failure, and confirmed deletion need distinct
+handling; only a proven absent/deleted event permits a clean cancelled state.
 
-### 6. Positive "availability events" are the base model — REJECT for Slotflow
+### Reschedule, observed order: delete old event → create new → append/update ledger
 
-The reference requires specially named calendar events to open bookable windows.
+Before that mutation sequence,
+[`handleRescheduleBooking()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs)
+excludes the current token from the Sheet overlap check, but calls
+[`CalendarService.isRangeAvailable()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Calendar.gs)
+while the old Calendar event still exists. That Calendar check has no corresponding exact
+old-event exclusion. A move such as 10:00–11:00 to 10:15–11:15 or 09:45–10:45 can therefore
+be rejected as busy by the booking itself; same-interval behavior has the same self-conflict
+hazard. Excluding only the ledger row is insufficient. **REJECT**. Slotflow must identify
+and exclude the exact old event, or use a reservation/transaction design that safely avoids
+self-conflict, while continuing to block every unrelated event. Issue #3 owns that design.
 
-**Slotflow rule:** use configured weekly business hours as the base window, then subtract Calendar occupancy. This better matches small-business operation and avoids filling the owner's calendar with synthetic availability events.
+If old deletion succeeds and new creation fails, the only valid appointment is destroyed.
+If new creation succeeds and ledger update fails, the replacement is orphaned and the
+ledger can still describe the old booking. Concurrent cancellation/reschedule can compound
+the split because tokens and row state are not a complete compare-and-set protocol.
+**REJECT**. Slotflow needs operation/version preconditions, a reserved replacement intent,
+and compensating/recovery rules. Do not report `rescheduled` until durable state agrees.
 
-### 7. Double-booking protection via Sheet + LockService is a useful pattern — ADAPT
+### Concurrency and manual edits
 
-The reference correctly recognizes Calendar read-after-write lag and checks a Sheet ledger under `LockService` before creating a booking.
+- Two same-slot requests must contend on one script/store lock and both re-check ledger and
+  Calendar *after* acquiring it. Lock timeout is a retryable busy response, not permission
+  to proceed. **ADAPT**.
+- Calendar reads can lag; active `pending`, `confirmed`, and relevant recovery states must
+  participate in ledger overlap checks. **ADAPT**.
+- Sheet reads/writes must use canonical row identifiers and explicit status/version checks;
+  `flush()` is not a compare-and-set. **REJECT** blind row mutation.
+- A manual opaque event is occupancy whether or not it has Slotflow metadata. Moving or
+  deleting a Slotflow event is drift to reconcile, not a reason to ignore the owner's live
+  Calendar. **ADAPT**.
 
-**Slotflow rule:** keep the idea, but formalize a `pending -> confirmed` transaction state and idempotency key instead of relying only on a final confirmed row.
+## 3. Calendar ↔ ledger reconciliation
 
-### 8. Create flow can leave an orphan Calendar event — REJECT as final behavior
+[`backend/Reconcile.gs`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Reconcile.gs)
+scans future confirmed ledger rows, uses a grace period to avoid fresh-write visibility
+false positives, and changes state only when the associated Calendar event is provably
+missing. This conservative ledger→Calendar check is useful. A transient Calendar error is
+not proof of absence. **ADOPT** the grace/uncertainty distinction; **ADAPT** the scope.
 
-The create path creates the Calendar event before appending the booking row. If the Sheet write fails after Calendar creation, the Calendar event can remain without a corresponding ledger record.
+Coverage is asymmetric:
 
-The current reconciliation primarily finds confirmed ledger rows whose Calendar event disappeared; it does not inherently reconstruct a missing ledger row from an orphan event.
+- stale/ghost ledger row after confirmed manual deletion: addressed most directly;
+- manually moved event: event-ID lookup may prove it exists, but the row's stored time can
+  remain stale unless reconciliation compares normalized start/end;
+- orphan Slotflow event after Sheet failure: there is no equivalent Calendar→ledger
+  inventory/reconstruction path;
+- arbitrary manual Calendar event: rightly blocks availability, but should not be imported
+  as a customer booking;
+- cancel/reschedule recovery states: not modeled sufficiently to converge both stores.
 
-**Slotflow rule:** every cross-system mutation must leave a detectable recovery state and reconciliation must consider both drift directions.
+Slotflow reconciliation must be bidirectional for Slotflow-tagged events, never synthesize
+customer data from arbitrary manual events, use a documented freshness/grace window, record
+last checked/error/action, and fail closed for availability when provider state is
+uncertain. Destructive repair should be idempotent and auditable. Issue #3 must decide
+whether a manually moved Slotflow event updates the ledger automatically or enters
+`review_required`.
 
-### 9. Cancellation can report success after Calendar deletion failure — REJECT
+## 4. Security audit
 
-`handleCancelBooking` catches/logs Calendar deletion errors, then still marks the Sheet row `cancelled`, sends cancellation email, and returns success.
+The Apps Script web app exposes public request dispatch through `doGet`/`doPost` in
+[`backend/Code.gs`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs).
+Public booking/availability may be intentional, but action dispatch is not authorization.
+The code reads an origin-like request parameter and an allowed origin, without a meaningful
+server-side authorization boundary; Apps Script does not thereby obtain a trustworthy
+browser `Origin` header. CORS would constrain browsers, not curl/bots. **REJECT**.
 
-That can tell the customer a booking is cancelled while the Calendar event remains and still blocks time.
+Commit [`883880e`](https://github.com/ContextLab/scheduler/commit/883880e) changed the
+automated/scheduled maintenance caller to send its credential in the POST body. It did not
+remove the old mechanism completely: at the audited revision,
+[`doGet()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs)
+still dispatches `reconcile`/`cleanup` and reads `e.parameter.key` for manual/ad-hoc use.
+The current implementation therefore retains a secret-bearing query-string route with URL,
+history, redirect and access-log exposure. **ADOPT** the no-secrets-in-URLs principle;
+**REJECT** the retained authenticated GET mutation. Slotflow maintenance mutations must not
+accept credentials through URL/query parameters. A POST endpoint still needs authorization,
+credential comparison, least privilege, rotation and replay/abuse design. Script Properties
+are preferable to source/static assets but are secret storage, not an authorization system.
 
-**Slotflow rule:** do not convert a failed Calendar mutation into a clean success. Use recovery-needed state/retry or return a controlled failure.
+Management links/tokens are bearer credentials. Slotflow must generate at least 128 bits
+with a cryptographically secure generator, store a hash rather than plaintext where
+practical, bind purpose/booking, expire, revoke/rotate after use, and never expose customer
+PII through lookup errors. The reference's expiring-token idea is useful, but entropy,
+storage and replay need explicit tests. **ADAPT**.
 
-### 10. Reschedule deletes the old event before the new event is safely committed — REJECT
+Validate action, timestamps, service ID, duration (server-derived), text lengths and
+formats before mutation; escape all values rendered into HTML/email or formulas. Prevent
+spreadsheet formula injection for cells beginning with formula markers. Return minimal
+booking data and non-enumerating errors. Public GitHub Pages assets necessarily expose all
+embedded configuration, so no secret belongs there. OAuth scopes in
+[`backend/appsscript.json`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/appsscript.json)
+must be reviewed and minimized; the Advanced Calendar service must be explicitly declared.
 
-The reschedule flow deletes the old Calendar event, then creates the new event and writes the new ledger row. If new-event creation or a later write fails, the original appointment has already been removed.
+Reference rate limiting uses CacheService counters and caller-controlled identifiers/email.
+Cache entries may expire/evict early and read-modify-write is not an atomic security
+primitive; identifiers rotate. It is best-effort abuse friction only. Add coarse operational
+limits/monitoring, but preserve lock, validation and idempotency independently. **ADAPT**.
 
-**Slotflow rule:** design reschedule as an explicit recoverable transaction; never destroy the only valid booking before the replacement is safely established or recoverable.
+## 5. Apps Script operational limits (one realistic store)
 
-### 11. Reconciliation is conservative but mainly one-directional — ADAPT
+This architecture can be reasonable for a lightly loaded pilot, but correctness must not
+depend on quota folklore. The reference health response's hard-coded daily email limit of
+50 can differ by account and provider changes. **REJECT** hard-coded quota claims.
 
-`Reconcile.gs` safely avoids cancelling fresh/unverifiable rows and reconciles future confirmed rows whose event is provably gone. This fail-closed approach is useful.
+- **Execution and concurrency:** keep lock-held work bounded; reject/retry on lock timeout;
+  measure p95 handler and reconciliation time. Never send email while holding the booking
+  lock. A burst from a rich-menu campaign can hit simultaneous-execution constraints even
+  for one store.
+- **LockService:** use the correct shared script/store lock, acquire before both conflict
+  checks, and do not continue unlocked after timeout. Test contention using separate real
+  executions because a synchronous mock cannot establish mutual exclusion semantics.
+- **CacheService:** accept eviction and non-atomic counters. Never store the only copy of a
+  booking, idempotency outcome, token revocation, or authorization decision there.
+- **Calendar:** batch/list bounded windows, paginate, declare the Advanced service, and
+  distinguish quota/transient/auth errors from empty results. Exponential backoff must stay
+  within execution limits and preserve retry identity.
+- **Sheets:** avoid whole-sheet scans per request; use stable schema/version, bounded indexes
+  or archival strategy, append/read-back verification, and formula-injection protection.
+  Measure at realistic row counts before migration rather than prematurely replacing it.
+- **Email:** notification quota/failure never rolls back or misstates a durable booking.
+  Persist notification status and retry separately.
+- **Scheduled reconciliation:** use a trigger with a checkpoint/bounded batch, mutual
+  exclusion with mutations, idempotent repairs and alerts when errors repeat. One-store
+  scale does not remove Apps Script execution ceilings.
 
-However Slotflow must also address:
+## 6. Tests, CI, and how much confidence they provide
 
-- orphan Slotflow Calendar event with no ledger row
-- moved event whose metadata association is lost
-- cancellation where Calendar delete failed
-- reschedule partial failure
+The repository contains backend test functions/fixtures, frontend tests, and browser/E2E
+artifacts. They are useful examples, especially the explicit all-day behavior fixture, but
+most Google services are mocked. Mocks prove branch behavior, not Calendar propagation,
+attendee-response identity, all-day date semantics, LockService exclusion, Sheet visibility,
+quota errors, or Apps Script deployment request behavior.
 
-### 12. Rate limiting is best-effort and client-controlled — ADAPT
+Material gaps include zero min notice, exact notice/horizon boundaries, direct-mutation
+service/duration enforcement, overlapping availability-window deduplication, arbitrary
+duration/buffers, self-overlapping reschedule, multiple-calendar partial failure, DST,
+idempotent retry, genuinely
+parallel booking, failure at every mutation boundary, cancel/reschedule races, orphan-event
+recovery, moved events, token entropy/replay, CacheService eviction/races and formula
+injection. Known production fixes are not all protected by targeted regression tests.
 
-The code acknowledges that CacheService read/modify/write counters are non-atomic. Per-client limiting uses a client-provided `clientId`; a determined caller can rotate identifiers and email addresses.
+Checked-in GitHub Actions are maintenance cleanup and secret scanning, not a required
+normal unit/integration workflow on every change. Repository files cannot prove branch
+protection; that is GitHub settings state and must be verified separately by an authorized
+maintainer. Therefore “tests exist” does not establish that `main` is protected. **REJECT**
+this process for Slotflow; Issue #4 must install required CI before backend implementation.
 
-**Slotflow rule:** use this only as abuse friction, never as an authentication or integrity boundary. Idempotency and booking locks protect correctness independently.
+## 7. Significant history and mandatory Slotflow regressions
 
-### 13. Tests exist, but normal regression CI is not enforced — REJECT as project process
+| History/fix | Independently observed implication | Slotflow regression |
+|---|---|---|
+| `c92dec7`: declare Advanced Calendar service | Earlier `Calendar.Events.list` could throw `Calendar is not defined`; catch/fallback used `CalendarApp`, whose available fields produce different transparency behavior | undeclared/unavailable service fails closed; transparent and opaque results cannot change through silent fallback |
+| transparency/free-busy changes | Event classification is provider-field-sensitive and differs between API surfaces | opaque, transparent, cancelled, self-declined, ambiguous attendee and all-day matrix against fixtures plus deployed integration |
+| `883880e`: scheduled caller moved from URL to POST body | URL credential transport was recognized as a leak vector, but `doGet()` still accepts `e.parameter.key` for maintenance | GET/query maintenance rejected; no credential in URL/log; invalid/absent POST credential rejected |
+| double-booking/ledger fixes | Calendar-only re-read did not cover propagation lag; lock + Sheet overlap was added | two parallel requests, lock timeout, lagged Calendar read, and overlapping pending intent |
+| ghost/reconciliation fixes | Calendar deletion/drift required a grace period and proof rather than treating lookup errors as absence | fresh row preserved, proven missing repaired, transient error unchanged, orphan inverse detected |
+| rescheduling fixes | Calendar availability still sees the exact old event although the Sheet check excludes its token; multi-step delete/create/row update also has destructive partial-failure boundaries | self-overlap/same/adjacent/third-party cases; inject failure before/after each external write and race reschedule vs cancel |
+| eventual-consistency changes | `flush()`/immediate reread cannot create cross-service atomicity | delayed Calendar visibility and delayed/failed Sheet finalization preserve one logical booking |
+| rate-limit changes | Cache/caller-key controls remain bypassable and non-atomic | correctness survives cache loss and identifier rotation |
 
-The repository has useful backend/frontend/E2E test files, but its checked-in GitHub Actions workflows are maintenance cleanup and secret scanning rather than a normal test workflow for every change.
+## 8. Final disposition
 
-**Slotflow rule:** test CI must exist before calendar booking implementation (#4).
+**ADOPT:** explicit Advanced Calendar declaration, opaque/transparent distinction, interval
+subtraction, secret scanning, the principle that secrets stay out of URLs, reconciliation grace/uncertainty,
+and the principle of a shared critical-section lock.
 
-### 14. Hard-coded quota assumptions can become stale — REJECT
+**ADAPT:** low-cost GAS/Sheets shape, multi-calendar classification, lock + ledger overlap,
+pending lifecycle/idempotency, expiring management tokens, bidirectional reconciliation,
+rate-limit friction, notifications, and scheduled maintenance.
 
-The health response hard-codes `daily_email_limit: 50`, while Google service quotas vary by account type and can change.
+**REJECT:** named availability events, ignored opaque all-day closures, truthy numeric
+defaults, unmerged positive availability windows, silent semantic fallback, client-supplied
+duration/booking integrity fields, secret-authenticated GET maintenance, Calendar-first
+create without durable intent, successful cancellation after failed deletion, reschedule
+self-conflict and delete-first reschedule, client/CORS authorization,
+CacheService as a boundary, duplicated client enforcement config, hard-coded quotas, and a
+development process without required correctness CI.
 
-**Slotflow rule:** do not encode mutable provider quotas as authoritative product constants. Detect/monitor actual errors and document provider limits as external constraints.
+No implementation from the reference is approved for copying. The audit is complete as a
+decision input, but Issue #2 should only be closed after repository maintainers confirm its
+acceptance criteria and branch-protection status; Issue #3 owns the unresolved contracts
+listed below.
 
-## Patterns worth reusing conceptually
+## Issue #3 questions deliberately left open
 
-- `LockService` around the critical booking section — **ADAPT**
-- ledger overlap guard to bridge Calendar propagation lag — **ADAPT**
-- fail-closed ghost detection — **ADAPT**
-- expiring cancellation/reschedule tokens — **ADAPT**
-- reconciliation job — **ADAPT**
-- secret scanning — **ADOPT**
-- static frontend + low-cost Google backend for a first-store pilot — **ADAPT**
-
-## Regression checklist before borrowing any code
-
-- concurrent same-slot booking
-- same request retried twice
-- `MIN_NOTICE_HOURS = 0`
-- all-day closure
-- transparent vs opaque event
-- cancelled/declined events
-- device timezone differs from store timezone
-- DST transition in a non-Japan test zone
-- Calendar create succeeds / ledger write fails
-- ledger pending succeeds / Calendar create fails
-- Calendar cancel/delete fails
-- reschedule fails after the old booking exists
-- owner manually creates/moves/deletes an event
-- orphan calendar event and stale ledger row
-
-## Decision rule
-
-No reference implementation code should enter Slotflow production logic unless its behavior is understood, independently tested, and compatible with Slotflow's simpler single-owner/single-location product model. Track this work in issue #2.
+1. Exact lifecycle states, legal transitions, retry ownership and terminal/manual-review
+   states for create/cancel/reschedule.
+2. Whether reschedule uses create-new-then-retire-old, a temporary hold, or another saga,
+   and how capacity is interpreted while both events exist.
+3. Exact min-notice/max-advance boundary, and whether buffers count against those boundaries.
+4. Which calendars are mandatory conflict sources and how self-declined/owner response is
+   identified for shared/invited events.
+5. Whether manually moved/deleted Slotflow events automatically rewrite lifecycle state or
+   require owner review, including grace duration.
+6. Token lifetime, one-time-use rules and customer re-authentication requirement.
+7. Reconciliation cadence, repair authority, event metadata marker and retention/archive
+   policy for the Sheet ledger.

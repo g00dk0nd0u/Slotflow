@@ -51,3 +51,15 @@ Slotflow benefits from events entered through normal Google Calendar voice workf
 ## ADR-013: Telephone integration is out of scope
 
 The earlier telephone integration idea is intentionally dropped. Slotflow focuses on schedule visibility, web booking, Calendar, and LINE.
+
+## ADR-014: Opaque all-day events close their covered store-local dates
+
+On every configured occupancy calendar, an opaque all-day event blocks the half-open date range `[start.date, end.date)` in the store timezone. Cancelled or explicitly transparent events do not block. This deliberately differs from the reference scheduler, which ignores all-day events, and supports ordinary owner-entered closures, travel, and leave.
+
+## ADR-015: Required Calendar reads fail closed
+
+Availability is not returned as free when a configured conflict calendar cannot be read or when the implementation cannot preserve event-classification semantics. Slotflow must distinguish an empty result from authorization, quota, transient, or missing-service failures; it must not silently fall back to a weaker Calendar API surface.
+
+## ADR-016: Server configuration and unambiguous instants are authoritative
+
+The backend owns service identity, duration, buffers, notice, horizon, allowed format/location, timezone, and occupancy-calendar enforcement. Mutation endpoints independently resolve and derive or validate these fields; frontend slot data and display defaults cannot relax those rules or serve as authorization. API timestamps are ISO 8601 instants with an offset or `Z`; store civil-time expansion uses an explicit IANA timezone. Numeric zero is preserved when valid rather than replaced by truthy-default expressions.
