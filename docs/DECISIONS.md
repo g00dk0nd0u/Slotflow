@@ -62,4 +62,4 @@ Availability is not returned as free when a configured conflict calendar cannot 
 
 ## ADR-016: Server configuration and unambiguous instants are authoritative
 
-The backend owns duration, buffers, notice, horizon, timezone, and occupancy-calendar enforcement. Frontend copies are display hints and cannot relax those rules. API timestamps are ISO 8601 instants with an offset or `Z`; store civil-time expansion uses an explicit IANA timezone. Numeric zero is preserved when valid rather than replaced by truthy-default expressions.
+The backend owns service identity, duration, buffers, notice, horizon, allowed format/location, timezone, and occupancy-calendar enforcement. Mutation endpoints independently resolve and derive or validate these fields; frontend slot data and display defaults cannot relax those rules or serve as authorization. API timestamps are ISO 8601 instants with an offset or `Z`; store civil-time expansion uses an explicit IANA timezone. Numeric zero is preserved when valid rather than replaced by truthy-default expressions.

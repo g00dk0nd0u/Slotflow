@@ -12,6 +12,7 @@ Run without Google services.
 - arbitrary service duration and independent pre/post buffers, including non-slot-multiple values
 - busy-interval subtraction
 - adjacent, nested, duplicate and partially overlapping intervals
+- overlapping base windows are normalized and cannot emit duplicate/overlapping slots
 - opaque one-day/multi-day all-day closures use `[start.date, end.date)` in store time
 - opaque, transparent, cancelled, self-declined and ambiguously declined event matrix
 - multiple calendars: union busy time; one mandatory-calendar read failure fails closed
@@ -39,6 +40,9 @@ Mock Calendar, Sheets, LockService and provider failures.
 - cancellation event absent vs transient delete failure vs confirmed deletion
 - cancellation raced with cancellation and with reschedule
 - reschedule failure before/after old delete, new create, and each ledger transition
+- reschedule to a partially overlapping later interval and partially overlapping earlier interval does not conflict with its exact old event
+- reschedule to the same interval has defined idempotent/no-op behavior; an adjacent interval does not self-conflict
+- an unrelated third-party Calendar event remains blocking when the old booking is excluded
 - new reschedule event succeeds / final ledger update fails
 - notification failure after otherwise successful create/cancel/reschedule
 - transient Calendar and Sheets failures preserve a non-success/recoverable state
@@ -54,7 +58,11 @@ Mock Calendar, Sheets, LockService and provider failures.
 - validation and normalized error responses
 - no secret leakage
 - no maintenance or management credential in query strings, redirects, logs or static assets
+- GET/query-string maintenance credentials and reconcile/cleanup mutations are rejected
 - direct requests without a browser/CORS context obey the same authorization policy
+- direct create rejects arbitrary start/end duration, unknown or mismatched service identity/name, and client-controlled buffers/notice/horizon
+- direct create derives or validates format/location according to the server-side service policy
+- direct reschedule cannot change service duration by supplying arbitrary `newStart`/`newEnd`
 - customer endpoints expose only required data
 - non-enumerating booking/token errors and spreadsheet-formula input escaping
 - cancellation/reschedule token entropy, hash-at-rest, purpose binding, expiry, revocation and replay

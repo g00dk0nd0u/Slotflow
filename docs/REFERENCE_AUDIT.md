@@ -22,18 +22,18 @@ integration-test obligation.
 | Reference pattern or behavior | Decision | Slotflow rule | Required regression |
 |---|---|---|---|
 | Static client + Apps Script for a one-store pilot | **ADAPT** | Accept the cost profile, not the reference security/transaction model | deployed-origin and real-service smoke tests |
-| Specially titled Calendar events define availability | **REJECT** | Expand configured business hours, then subtract busy intervals | ordinary manual events block; no magic title required |
+| Specially titled Calendar events define availability | **REJECT** | Expand configured business hours, then subtract busy intervals | ordinary manual events block; overlapping base windows cannot duplicate slots |
 | Advanced Calendar API for event status/transparency | **ADAPT** | Declare the service and fail closed if semantics cannot be preserved | missing service cannot silently change results |
 | Opaque timed events block; transparent events do not | **ADOPT** | Apply consistently on every configured conflict calendar | opaque/transparent matrix |
 | Ignore every all-day event | **REJECT** | Opaque all-day event on an occupancy calendar closes its covered local dates | one-day and multi-day closures |
 | Script lock plus ledger overlap check | **ADAPT** | Lock the whole conflict-check/intent/create/finalize section; use explicit states | two truly concurrent executions |
 | Final booking rows bridge Calendar read lag | **ADAPT** | Include pending and recovery states, idempotency key, and flush/read-back rules | Calendar lag and retry injection |
-| Delete old event first when rescheduling | **REJECT** | Preserve the old durable booking until replacement is recoverable | failure at every reschedule boundary |
+| Reschedule checks the old event, then deletes it first | **REJECT** | A booking must not conflict with itself; preserve the old durable booking until replacement is recoverable | self-overlap/same/adjacent/third-party conflict and every failure boundary |
 | Continue cancellation after Calendar delete error | **REJECT** | Never return `cancelled` while an opaque old event may remain | deletion error yields recovery state/non-success |
 | Conservative missing-event reconciliation | **ADAPT** | Reconcile both directions and distinguish absence from provider uncertainty | stale, orphaned, moved and transient-error cases |
 | Expiring management tokens | **ADAPT** | CSPRNG, hashed at rest, purpose-bound, expiring and revocable | entropy/expiry/purpose/replay tests |
 | CacheService request counters | **ADAPT** | Abuse friction only, never authorization or booking integrity | cache miss/eviction/race/bypass tests |
-| Maintenance secret in POST body | **ADOPT** | Keep credentials out of URLs, but authenticate and authorize maintenance separately | URL/log leakage check and invalid-secret rejection |
+| Scheduled maintenance uses POST, but manual GET still accepts `key` | **REJECT** the GET route; **ADOPT** no secrets in URLs | Maintenance mutations accept no credential in a URL/query parameter | GET/query route rejection, URL/log leakage, invalid-secret rejection |
 | CORS/origin parameter as protection | **REJECT** | Browser origin policy is not caller authorization | direct non-browser request reaches only public contract |
 | Secret scanning workflow | **ADOPT** | Keep it alongside, not instead of, functional CI | seeded canary fixture is detected |
 
@@ -52,10 +52,13 @@ Timed opaque events are treated as busy and transparent events as free when the 
 Calendar service path is available. Cancelled events are excluded. Declined-event logic
 depends on attendee response information and must be verified against the configured
 calendar/account, not inferred merely from event presence. All-day events are deliberately
-discarded by both implementation and tests. Overlaps are handled as interval subtraction,
-but arbitrary service duration/buffer boundaries are not established strongly enough for
-Slotflow's generic-service contract. **ADOPT** interval subtraction; **ADAPT** classification;
-**REJECT** ignoring all-day events.
+discarded by both implementation and tests. Busy overlaps are handled during interval
+subtraction, but the positive availability-event list is iterated without first merging
+overlapping windows and emitted slots are not deduplicated. Two overlapping positive
+windows can therefore emit the same or overlapping candidate slots. Arbitrary service
+duration/buffer boundaries are also not established strongly enough for Slotflow's generic
+service contract. **ADOPT** interval subtraction; **ADAPT** classification; **REJECT**
+unnormalized base windows and ignoring all-day events.
 
 Slotflow's classification contract should be:
 
@@ -94,6 +97,17 @@ notice or horizon values can drift from enforcement. UI values are hints only; b
 configuration is authoritative and responses should include a configuration version where
 the UI needs matching display behavior. **REJECT** duplicated enforcement defaults.
 
+This is not only configuration drift. In
+[`handleCreateBooking()` and `handleRescheduleBooking()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs),
+the mutation payload supplies timestamps and booking fields such as meeting type identity/name,
+format and location. The create path checks the requested range for availability, but does
+not independently prove that its length matches the configured meeting type. The reschedule
+path accepts `newStart`/`newEnd` rather than deriving the end from the original service
+duration. Consequently, a direct caller is not constrained by the duration list returned by
+the availability endpoint. **REJECT** frontend-generated slots as authority. Slotflow's
+mutation handler must resolve the service server-side and independently derive or validate
+duration, buffers, notice, horizon, format/location policy and all other integrity fields.
+
 ## 2. Booking integrity and mutation traces
 
 The reference's important improvement is recognizing that a fresh Calendar write may not
@@ -131,6 +145,17 @@ not. **REJECT**. Deletion not-found, transient failure, and confirmed deletion n
 handling; only a proven absent/deleted event permits a clean cancelled state.
 
 ### Reschedule, observed order: delete old event → create new → append/update ledger
+
+Before that mutation sequence,
+[`handleRescheduleBooking()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs)
+excludes the current token from the Sheet overlap check, but calls
+[`CalendarService.isRangeAvailable()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Calendar.gs)
+while the old Calendar event still exists. That Calendar check has no corresponding exact
+old-event exclusion. A move such as 10:00–11:00 to 10:15–11:15 or 09:45–10:45 can therefore
+be rejected as busy by the booking itself; same-interval behavior has the same self-conflict
+hazard. Excluding only the ledger row is insufficient. **REJECT**. Slotflow must identify
+and exclude the exact old event, or use a reservation/transaction design that safely avoids
+self-conflict, while continuing to block every unrelated event. Issue #3 owns that design.
 
 If old deletion succeeds and new creation fails, the only valid appointment is destroyed.
 If new creation succeeds and ledger update fails, the replacement is orphaned and the
@@ -187,12 +212,17 @@ The code reads an origin-like request parameter and an allowed origin, without a
 server-side authorization boundary; Apps Script does not thereby obtain a trustworthy
 browser `Origin` header. CORS would constrain browsers, not curl/bots. **REJECT**.
 
-Commit [`883880e`](https://github.com/ContextLab/scheduler/commit/883880e) moved the
-maintenance secret from a GET query parameter into a POST body. That removes common URL,
-history, redirect and access-log exposure, but the endpoint still needs constant-time
-credential comparison where available, least privilege, rotation and replay/abuse design.
-Script Properties are preferable to source/static assets but are secret storage, not an
-authorization system. **ADOPT** no-secrets-in-URLs; **ADAPT** maintenance authentication.
+Commit [`883880e`](https://github.com/ContextLab/scheduler/commit/883880e) changed the
+automated/scheduled maintenance caller to send its credential in the POST body. It did not
+remove the old mechanism completely: at the audited revision,
+[`doGet()`](https://github.com/ContextLab/scheduler/blob/c92dec793039fa5a365162029041bdbd26088901/backend/Code.gs)
+still dispatches `reconcile`/`cleanup` and reads `e.parameter.key` for manual/ad-hoc use.
+The current implementation therefore retains a secret-bearing query-string route with URL,
+history, redirect and access-log exposure. **ADOPT** the no-secrets-in-URLs principle;
+**REJECT** the retained authenticated GET mutation. Slotflow maintenance mutations must not
+accept credentials through URL/query parameters. A POST endpoint still needs authorization,
+credential comparison, least privilege, rotation and replay/abuse design. Script Properties
+are preferable to source/static assets but are secret storage, not an authorization system.
 
 Management links/tokens are bearer credentials. Slotflow must generate at least 128 bits
 with a cryptographically secure generator, store a hash rather than plaintext where
@@ -248,8 +278,10 @@ most Google services are mocked. Mocks prove branch behavior, not Calendar propa
 attendee-response identity, all-day date semantics, LockService exclusion, Sheet visibility,
 quota errors, or Apps Script deployment request behavior.
 
-Material gaps include zero min notice, exact notice/horizon boundaries, arbitrary
-duration/buffers, multiple-calendar partial failure, DST, idempotent retry, genuinely
+Material gaps include zero min notice, exact notice/horizon boundaries, direct-mutation
+service/duration enforcement, overlapping availability-window deduplication, arbitrary
+duration/buffers, self-overlapping reschedule, multiple-calendar partial failure, DST,
+idempotent retry, genuinely
 parallel booking, failure at every mutation boundary, cancel/reschedule races, orphan-event
 recovery, moved events, token entropy/replay, CacheService eviction/races and formula
 injection. Known production fixes are not all protected by targeted regression tests.
@@ -266,17 +298,17 @@ this process for Slotflow; Issue #4 must install required CI before backend impl
 |---|---|---|
 | `c92dec7`: declare Advanced Calendar service | Earlier `Calendar.Events.list` could throw `Calendar is not defined`; catch/fallback used `CalendarApp`, whose available fields produce different transparency behavior | undeclared/unavailable service fails closed; transparent and opaque results cannot change through silent fallback |
 | transparency/free-busy changes | Event classification is provider-field-sensitive and differs between API surfaces | opaque, transparent, cancelled, self-declined, ambiguous attendee and all-day matrix against fixtures plus deployed integration |
-| `883880e`: maintenance secret moved from URL to POST body | URL credential transport was recognized as a leak vector | no credential in URL/log; invalid/absent secret rejected |
+| `883880e`: scheduled caller moved from URL to POST body | URL credential transport was recognized as a leak vector, but `doGet()` still accepts `e.parameter.key` for maintenance | GET/query maintenance rejected; no credential in URL/log; invalid/absent POST credential rejected |
 | double-booking/ledger fixes | Calendar-only re-read did not cover propagation lag; lock + Sheet overlap was added | two parallel requests, lock timeout, lagged Calendar read, and overlapping pending intent |
 | ghost/reconciliation fixes | Calendar deletion/drift required a grace period and proof rather than treating lookup errors as absence | fresh row preserved, proven missing repaired, transient error unchanged, orphan inverse detected |
-| rescheduling fixes | Multi-step delete/create/row update still has destructive partial-failure boundaries | inject failure before/after each external write and race reschedule vs cancel |
+| rescheduling fixes | Calendar availability still sees the exact old event although the Sheet check excludes its token; multi-step delete/create/row update also has destructive partial-failure boundaries | self-overlap/same/adjacent/third-party cases; inject failure before/after each external write and race reschedule vs cancel |
 | eventual-consistency changes | `flush()`/immediate reread cannot create cross-service atomicity | delayed Calendar visibility and delayed/failed Sheet finalization preserve one logical booking |
 | rate-limit changes | Cache/caller-key controls remain bypassable and non-atomic | correctness survives cache loss and identifier rotation |
 
 ## 8. Final disposition
 
 **ADOPT:** explicit Advanced Calendar declaration, opaque/transparent distinction, interval
-subtraction, secret scanning, secrets absent from URLs, reconciliation grace/uncertainty,
+subtraction, secret scanning, the principle that secrets stay out of URLs, reconciliation grace/uncertainty,
 and the principle of a shared critical-section lock.
 
 **ADAPT:** low-cost GAS/Sheets shape, multi-calendar classification, lock + ledger overlap,
@@ -284,8 +316,10 @@ pending lifecycle/idempotency, expiring management tokens, bidirectional reconci
 rate-limit friction, notifications, and scheduled maintenance.
 
 **REJECT:** named availability events, ignored opaque all-day closures, truthy numeric
-defaults, silent semantic fallback, Calendar-first create without durable intent, successful
-cancellation after failed deletion, delete-first reschedule, client/CORS authorization,
+defaults, unmerged positive availability windows, silent semantic fallback, client-supplied
+duration/booking integrity fields, secret-authenticated GET maintenance, Calendar-first
+create without durable intent, successful cancellation after failed deletion, reschedule
+self-conflict and delete-first reschedule, client/CORS authorization,
 CacheService as a boundary, duplicated client enforcement config, hard-coded quotas, and a
 development process without required correctness CI.
 
