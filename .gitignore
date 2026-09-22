@@ -1,0 +1,24 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Apps Script local tooling
+.clasp.json
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
