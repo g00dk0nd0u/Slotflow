@@ -1,43 +1,91 @@
 # Slotflow
 
-Lightweight appointment scheduling for small businesses with Google Calendar and LINE integration.
+Lightweight Google Calendar companion for small appointment-based businesses.
 
-Slotflow starts with a **single owner / single location** and is intentionally domain-generic. The first-store experience is optimized around an **always-ready Android tablet**, not a complex admin application.
+## Product north star
 
-## Product direction
+The store manager uses **Google Calendar for almost all schedule operations**. Slotflow does not replace Google Calendar and does not ask the manager to maintain the same appointment twice.
 
-- **Google Calendar** is the owner's operational schedule and occupancy surface.
-- **Android tablet PWA** shows the next appointment, today's schedule and free gaps immediately.
-- **Google Apps Script + Google Sheets** are the low-cost pilot backend/booking ledger where appropriate.
-- **LINE Official Account** is the primary Japan customer entry point; the MVP can open the booking page/LIFF directly without a Messaging API webhook.
-- Manual Calendar events, including events created through normal Google/Gemini workflows, must block customer availability correctly.
-- Telephone integration is explicitly out of scope.
+Slotflow has two jobs:
 
-## Non-negotiable engineering rules
+1. **Read Google Calendar and present it better** on a dedicated Android tablet.
+2. **Later, let customers book from Web/LINE** by writing appointments into Google Calendar.
 
-- No double booking under concurrent requests.
-- Cross-system partial failures must be visible and recoverable.
-- Store timezone and all-day closure behavior are explicit and tested.
-- Reference OSS is audited before any implementation is reused.
-- Regression CI is established before calendar booking logic is implemented.
+## First useful milestone
+
+```text
+Google Calendar
+      |
+      v
+small read API
+      |
+      v
+Android tablet PWA
+```
+
+The tablet shows:
+
+- next appointment
+- today's schedule
+- free gaps / next available gap
+- stale/offline status when live data is unavailable
+
+The manager continues to add, move, delete and edit appointments in Google Calendar. Slotflow simply reflects those changes.
+
+For this first milestone there is **no Google Sheets booking ledger, no owner-side booking CRUD UI, and no booking state machine**.
+
+## Later customer booking
+
+After the Calendar dashboard works, a customer flow can be added:
+
+```text
+LINE / Web
+    |
+    v
+Slotflow booking page
+    |
+    v
+Google Calendar
+```
+
+Only the minimum safeguards needed for customer writes—slot re-checking, duplicate-write protection and clear Calendar write failure handling—should be added. A second booking database is not a default requirement.
 
 ## Current status
 
-Architecture / reference-audit phase. No production booking core yet.
+- Reference repository audit: complete
+- Architecture: being simplified around the Calendar-first product model
+- Production Calendar adapter/dashboard: not yet implemented
 
 Start here:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Architecture decisions](docs/DECISIONS.md)
-- [Reference repository audit](docs/REFERENCE_AUDIT.md)
-- [Test strategy](docs/TEST_STRATEGY.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Issue plan](docs/ISSUE_PLAN.md)
+- [Test strategy](docs/TEST_STRATEGY.md)
+- [Reference repository audit](docs/REFERENCE_AUDIT.md)
 - [MVP roadmap issue #1](https://github.com/g00dk0nd0u/Slotflow/issues/1)
 
-## Why not simply fork an existing scheduler?
+## Scope
 
-The closest reference implementation already contains valuable fixes for Calendar propagation, double-booking and reconciliation, but its current behavior also exposes assumptions that do not fit Slotflow (for example named availability events, ignored all-day events, non-atomic cancellation/rescheduling paths, and a zero-value configuration edge case). Slotflow therefore reuses **ideas only after independent tests**, rather than inheriting an entire codebase.
+First release:
+
+- single owner / single location
+- generic appointment business
+- Google Calendar as the operational schedule
+- Android tablet display
+- customer booking into Calendar later
+- LINE entry point later
+
+Explicitly deferred:
+
+- owner-side duplicate calendar/admin system
+- mandatory Google Sheets ledger
+- large booking lifecycle state machine
+- multi-location/franchise
+- payment/POS/inventory/payroll/full CRM
+- telephone integration
+- conversational LINE bot infrastructure unless its value is proven
 
 ## License
 
