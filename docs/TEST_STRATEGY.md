@@ -16,8 +16,9 @@ Run without Google services.
 - opaque one-day/multi-day all-day closures use `[start.date, end.date)` in store time
 - opaque, transparent, cancelled, self-declined and ambiguously declined event matrix
 - multiple calendars: union busy time; one mandatory-calendar read failure fails closed
-- min-notice including exactly `0`, negative/invalid/missing configuration, and exact boundary
-- max-advance exact boundary and invalid configuration
+- min-notice including exactly `0`, negative/invalid/missing configuration, and the exact boundary defined by Issue #3
+- max-advance exact boundary and invalid configuration, following the Issue #3 contract
+- pre/post-buffer cases at both boundaries, with expected outcomes determined by Issue #3 rather than assumed here
 - store timezone independent of device timezone
 - malformed or offset-free API timestamps rejected
 - DST spring gap and autumn fold in at least one DST-observing timezone

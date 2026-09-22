@@ -70,8 +70,9 @@ Slotflow's classification contract should be:
    unambiguously declined; ambiguous/missing attendee identity fails closed.
 6. Merge overlapping/touching occupied intervals before testing a candidate whose occupied
    span includes pre/post buffers.
-7. Apply min notice to the buffered start and max advance to a precisely specified booking
-   boundary; Issue #3 must choose those boundary rules.
+7. Have Issue #3 explicitly define the min-notice and max-advance boundaries, including
+   whether pre/post buffers participate. Enforce the chosen rule server-side and cover its
+   exact boundaries with regression tests; this audit intentionally chooses no interpretation.
 
 Multiple-calendar behavior must not be an accidental loop: partial failure reading any
 required conflict calendar makes availability unknown (fail closed), rather than treating
