@@ -15,10 +15,14 @@ var CalendarReadAdapter = (function () {
         maxResults: 2500,
         pageToken: pageToken
       });
-      if (!response || !Array.isArray(response.items)) {
+      if (!response || typeof response !== 'object' || Array.isArray(response)) {
         throw new Error('Calendar returned an invalid event list');
       }
-      events = events.concat(response.items);
+      var items = response.items == null ? [] : response.items;
+      if (!Array.isArray(items)) {
+        throw new Error('Calendar returned an invalid event list');
+      }
+      events = events.concat(items);
       pageToken = response.nextPageToken;
     } while (pageToken);
     return events;
