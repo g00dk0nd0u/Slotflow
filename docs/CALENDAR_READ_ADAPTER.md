@@ -22,9 +22,10 @@ failures return an explicit `ok: false` result. The implementation does not fall
 
 ## Calling and response
 
-Invoke `getDashboardSchedule()` from trusted server-side Apps Script code. It is a callable
-function, **not a public HTTP API**, and no `doGet`/`doPost` endpoint is provided. Issue #6
-will choose an authenticated transport without sending OAuth tokens to the dashboard.
+The dashboard invokes `getDashboardSchedule()` through authenticated Apps Script
+`google.script.run`. It is a callable function, **not a public JSON HTTP API**. The web
+app's `doGet()` serves only the HTML shell and sends no OAuth tokens to the dashboard.
+Deployment and Android usage are documented in [DASHBOARD.md](DASHBOARD.md).
 
 Successful results have this shape (timed values are ISO-8601 UTC instants; all-day values
 are half-open store-local dates):

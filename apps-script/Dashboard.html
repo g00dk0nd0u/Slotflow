@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <?!= include_('DashboardStyles'); ?>
+</head>
+<body>
+  <main class="dashboard">
+    <header class="topbar">
+      <div>
+        <p id="store-date" class="date">読み込み中</p>
+        <p id="store-clock" class="clock">--:--</p>
+      </div>
+      <div class="status-wrap" aria-live="polite">
+        <span id="status" class="status status-loading">更新中</span>
+        <span id="last-updated" class="updated"></span>
+        <button id="refresh" type="button">更新</button>
+      </div>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-label">
+      <p id="hero-label" class="eyebrow">次の予定</p>
+      <p id="hero-time" class="hero-time">--:--</p>
+      <h1 id="hero-title">予定を確認しています</h1>
+      <p id="hero-date" class="hero-date"></p>
+    </section>
+
+    <div id="all-day" class="all-day" hidden></div>
+
+    <div class="columns">
+      <section class="panel" aria-labelledby="events-heading">
+        <h2 id="events-heading">本日の予定</h2>
+        <div id="events" class="list"><p class="empty">読み込み中</p></div>
+      </section>
+      <section class="panel" aria-labelledby="gaps-heading">
+        <div class="panel-heading">
+          <h2 id="gaps-heading">空き時間</h2>
+          <span id="next-gap" class="next-gap"></span>
+        </div>
+        <div id="gaps" class="list"><p class="empty">読み込み中</p></div>
+      </section>
+    </div>
+  </main>
+  <?!= include_('DashboardClient'); ?>
+</body>
+</html>

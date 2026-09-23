@@ -1,0 +1,174 @@
+<script>
+(function (root) {
+  'use strict';
+  var CACHE_KEY = 'slotflow.dashboard.schedule.v1';
+  var REFRESH_MS = 30000;
+  var state = { payload: null, refreshing: false, live: false, usable: false };
+  var el = {};
+
+  function validInstant(value) { return typeof value === 'string' && !isNaN(Date.parse(value)); }
+  function validEvent(value) {
+    return value && typeof value.title === 'string' && typeof value.start === 'string' &&
+      typeof value.end === 'string' && typeof value.allDay === 'boolean';
+  }
+  function validPayload(value) {
+    return Boolean(value && value.ok === true && typeof value.timezone === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value.storeLocalDate || '') && validInstant(value.generatedAt) &&
+      value.today && Array.isArray(value.today.timedEvents) && value.today.timedEvents.every(validEvent) &&
+      Array.isArray(value.today.allDayEvents) && value.today.allDayEvents.every(validEvent) &&
+      Array.isArray(value.today.freeGaps) && value.today.freeGaps.every(function (gap) {
+        return gap && validInstant(gap.start) && validInstant(gap.end);
+      }) && (!value.today.currentOrNextEvent || validEvent(value.today.currentOrNextEvent)));
+  }
+  function normalizedPayload(value) {
+    function event(item) {
+      return { id: String(item.id || ''), title: item.title, start: item.start, end: item.end,
+        allDay: item.allDay, busy: item.busy === true };
+    }
+    return {
+      ok: true, generatedAt: value.generatedAt, timezone: value.timezone, storeLocalDate: value.storeLocalDate,
+      today: {
+        allDayEvents: value.today.allDayEvents.map(event),
+        timedEvents: value.today.timedEvents.map(event),
+        currentOrNextEvent: value.today.currentOrNextEvent ? event(value.today.currentOrNextEvent) : null,
+        freeGaps: value.today.freeGaps.map(function (gap) { return { start: gap.start, end: gap.end }; })
+      },
+      upcomingEvents: Array.isArray(value.upcomingEvents) ? value.upcomingEvents.filter(validEvent).map(event) : []
+    };
+  }
+  function formatter(timezone, options) {
+    return new Intl.DateTimeFormat('ja-JP', Object.assign({ timeZone: timezone }, options));
+  }
+  function storeDate(value, timezone) {
+    var parts = new Intl.DateTimeFormat('en', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(value);
+    var result = {};
+    parts.forEach(function (part) { if (part.type !== 'literal') result[part.type] = part.value; });
+    return result.year + '-' + result.month + '-' + result.day;
+  }
+  function time(value, timezone) {
+    return formatter(timezone, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
+  }
+  function date(value, timezone) {
+    return formatter(timezone, { month: 'numeric', day: 'numeric', weekday: 'short' }).format(new Date(value));
+  }
+  function range(item, timezone) { return time(item.start, timezone) + '–' + time(item.end, timezone); }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function paragraph(className, text) {
+    var node = document.createElement('p'); node.className = className; node.textContent = text; return node;
+  }
+  function setStatus(kind, label) {
+    el.status.className = 'status status-' + kind;
+    el.status.textContent = label;
+  }
+  function focusEvent(payload, now) {
+    return payload.today.timedEvents.concat(payload.upcomingEvents).filter(function (event) {
+      return !event.allDay && new Date(event.end) > now;
+    }).sort(function (left, right) {
+      return new Date(left.start) - new Date(right.start) || new Date(left.end) - new Date(right.end);
+    })[0] || null;
+  }
+  function render(payload, mode) {
+    state.payload = payload;
+    state.usable = true;
+    var timezone = payload.timezone;
+    var now = new Date();
+    var focus = focusEvent(payload, now);
+    if (focus) {
+      var ongoing = new Date(focus.start) <= now && now < new Date(focus.end);
+      el.heroLabel.textContent = ongoing ? '現在の予定' : '次の予定';
+      el.heroTime.textContent = range(focus, timezone);
+      el.heroTitle.textContent = focus.title;
+      el.heroDate.textContent = date(focus.start, timezone) === date(now, timezone) ? '' : date(focus.start, timezone);
+    } else {
+      el.heroLabel.textContent = '次の予定'; el.heroTime.textContent = '—';
+      el.heroTitle.textContent = '今後の予定はありません'; el.heroDate.textContent = '';
+    }
+    clear(el.events);
+    if (!payload.today.timedEvents.length) el.events.appendChild(paragraph('empty', '本日の予定はありません'));
+    payload.today.timedEvents.forEach(function (event) {
+      var row = document.createElement('div'); row.className = 'row';
+      var label = paragraph('row-time', range(event, timezone));
+      if (new Date(event.start) <= now && now < new Date(event.end)) label.appendChild(paragraph('ongoing', '進行中'));
+      row.appendChild(label); row.appendChild(paragraph('row-title', event.title)); el.events.appendChild(row);
+    });
+    clear(el.gaps);
+    if (!payload.today.freeGaps.length) el.gaps.appendChild(paragraph('empty', '本日の空き時間はありません'));
+    payload.today.freeGaps.forEach(function (gap) {
+      var row = document.createElement('div'); row.className = 'row';
+      row.appendChild(paragraph('row-time', range(gap, timezone))); row.appendChild(paragraph('row-title', '空き'));
+      el.gaps.appendChild(row);
+    });
+    var nextGap = payload.today.freeGaps.filter(function (gap) { return new Date(gap.end) > now; })[0];
+    el.nextGap.textContent = nextGap ? '次の空き ' + range(nextGap, timezone) : '';
+    clear(el.allDay);
+    el.allDay.hidden = !payload.today.allDayEvents.length;
+    if (payload.today.allDayEvents.length) {
+      el.allDay.appendChild(paragraph('', '終日: ' + payload.today.allDayEvents.map(function (event) { return event.title; }).join('・')));
+    }
+    el.lastUpdated.textContent = '前回更新 ' + time(payload.generatedAt, timezone);
+    setStatus(mode === 'live' ? 'live' : 'stale', mode === 'live' ? '最新' : '保存データ');
+    updateClock();
+  }
+  function unavailable() {
+    state.live = false; state.usable = false;
+    el.heroLabel.textContent = '次の予定'; el.heroTime.textContent = '—';
+    el.heroTitle.textContent = '最新情報を取得できません'; el.heroDate.textContent = '';
+    clear(el.events); el.events.appendChild(paragraph('empty', '本日の予定を確認できません'));
+    clear(el.gaps); el.gaps.appendChild(paragraph('empty', '空き時間を確認できません'));
+    clear(el.allDay); el.allDay.hidden = true; el.nextGap.textContent = ''; el.lastUpdated.textContent = '';
+  }
+  function updateClock() {
+    if (!state.payload) return;
+    var timezone = state.payload.timezone, now = new Date();
+    el.storeDate.textContent = formatter(timezone, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(now);
+    el.storeClock.textContent = time(now, timezone);
+    if (state.usable && storeDate(now, timezone) !== state.payload.storeLocalDate) {
+      unavailable(); setStatus('error', '最新情報を取得できません');
+    }
+  }
+  function failure() {
+    state.live = false;
+    if (state.usable) setStatus('stale', '更新失敗・保存データ');
+    else { unavailable(); setStatus('error', '最新情報を取得できません'); }
+  }
+  function refresh() {
+    if (state.refreshing) return false;
+    state.refreshing = true; el.refresh.disabled = true;
+    setStatus('loading', state.usable && !state.live ? '更新中・保存データ' : '更新中');
+    function finish() { state.refreshing = false; el.refresh.disabled = false; }
+    google.script.run.withSuccessHandler(function (payload) {
+      finish();
+      if (!validPayload(payload)) { failure(); return; }
+      payload = normalizedPayload(payload);
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch (ignore) {}
+      state.payload = payload;
+      if (storeDate(new Date(), payload.timezone) !== payload.storeLocalDate) { unavailable(); failure(); return; }
+      state.live = true; render(payload, 'live');
+    }).withFailureHandler(function () { finish(); failure(); }).getDashboardSchedule();
+    return true;
+  }
+  function init() {
+    ['store-date','store-clock','status','last-updated','refresh','hero-label','hero-time','hero-title','hero-date','all-day','events','gaps','next-gap'].forEach(function (id) {
+      el[id.replace(/-([a-z])/g, function (_, letter) { return letter.toUpperCase(); })] = document.getElementById(id);
+    });
+    try {
+      var cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+      if (validPayload(cached)) {
+        cached = normalizedPayload(cached);
+        state.payload = cached;
+        if (storeDate(new Date(), cached.timezone) === cached.storeLocalDate) render(cached, 'cached');
+        else { updateClock(); unavailable(); setStatus('error', '最新情報を取得できません'); }
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+      }
+    } catch (ignore) {}
+    el.refresh.addEventListener('click', refresh);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+    setInterval(refresh, REFRESH_MS); setInterval(updateClock, 1000); refresh();
+  }
+  root.SlotflowDashboard = { init: init, refresh: refresh, validPayload: validPayload,
+    formatTime: time, storeDate: storeDate, _state: state };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})(this);
+</script>
