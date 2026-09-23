@@ -12,7 +12,7 @@ The store manager operates almost entirely in Google Calendar. Slotflow should f
    Complete. Keep as reference material only.
 
 2. **#5 — Implement Google Calendar read adapter for the owner dashboard**  
-   Small read path only. No Sheets/state machine.
+   Small read path only. No Sheets/state machine. Protect the private Calendar behind an authenticated/minimally exposed dashboard API.
 
 3. **#6 — Build instant-access Android Calendar dashboard PWA**  
    Can prototype with fixtures immediately; connects to #5.
@@ -34,7 +34,7 @@ The store manager operates almost entirely in Google Calendar. Slotflow should f
 9. **#11 — Hardening, quota validation and first-store pilot**
 
 10. **#9 — Secure conversational LINE webhook**  
-    Deferred until chat automation is actually required.
+    Deferred until chat automation is actually required and depends on the customer booking path, not the read-only Calendar adapter.
 
 ## Critical path
 
