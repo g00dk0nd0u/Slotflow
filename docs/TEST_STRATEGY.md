@@ -29,7 +29,17 @@ Cover:
 - empty day
 - Calendar read failure is not shown as an empty/free schedule
 
-### 3. Android/PWA behavior
+### 3. Dashboard API privacy/access
+
+Cover:
+
+- unauthenticated requests cannot read the store schedule
+- the source Google Calendar is not made public as a deployment shortcut
+- Google OAuth access/refresh tokens and client secrets are never exposed to the PWA or static assets
+- dashboard responses contain only the fields needed for schedule display
+- authorization/provider failures are distinguishable from a genuinely empty schedule
+
+### 4. Android/PWA behavior
 
 Cover:
 
@@ -39,7 +49,7 @@ Cover:
 - resume returns directly to the schedule
 - no owner-side booking CRUD dependency
 
-### 4. CI
+### 5. CI
 
 Fast tests and Markdown/link checks should run on every PR/push.
 
