@@ -54,7 +54,7 @@ Only the minimum safeguards needed for customer writes—slot re-checking, dupli
 
 - Reference repository audit: complete
 - Architecture: being simplified around the Calendar-first product model
-- Calendar read adapter: implemented; dashboard transport/UI: not yet implemented
+- Calendar read adapter and authenticated Apps Script dashboard: implemented
 
 Start here:
 
@@ -64,6 +64,7 @@ Start here:
 - [Issue plan](docs/ISSUE_PLAN.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Calendar read adapter operations](docs/CALENDAR_READ_ADAPTER.md)
+- [Android dashboard pilot](docs/DASHBOARD.md)
 - [Reference repository audit](docs/REFERENCE_AUDIT.md)
 - [MVP roadmap issue #1](https://github.com/g00dk0nd0u/Slotflow/issues/1)
 
