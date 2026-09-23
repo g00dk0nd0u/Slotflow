@@ -1,119 +1,88 @@
 # Test Strategy
 
-Slotflow treats scheduling correctness as the first implementation feature. The test suite must exist before the booking core is considered usable.
+Slotflow tests should follow product scope. The first milestone is a Google Calendar read/display companion, not a full booking transaction platform.
 
-## Layers
+## Immediate tests — Calendar read/dashboard
 
-### 1. Pure time/availability tests
+### 1. Calendar event normalization
 
-Run without Google services.
+Cover:
 
-- weekly business-hours expansion
-- arbitrary service duration and independent pre/post buffers, including non-slot-multiple values
-- busy-interval subtraction
-- adjacent, nested, duplicate and partially overlapping intervals
-- overlapping base windows are normalized and cannot emit duplicate/overlapping slots
-- opaque one-day/multi-day all-day closures use `[start.date, end.date)` in store time
-- opaque, transparent, cancelled, self-declined and ambiguously declined event matrix
-- multiple calendars: union busy time; one mandatory-calendar read failure fails closed
-- min-notice including exactly `0`, negative/invalid/missing configuration, and the exact boundary defined by Issue #3
-- max-advance exact boundary and invalid configuration, following the Issue #3 contract
-- pre/post-buffer cases at both boundaries, with expected outcomes determined by Issue #3 rather than assumed here
-- store timezone independent of device timezone
-- malformed or offset-free API timestamps rejected
-- DST spring gap and autumn fold in at least one DST-observing timezone
-- backend configuration remains authoritative when frontend values/defaults disagree
+- timed events
+- opaque vs transparent events where relevant
+- cancelled events
+- one-day and multi-day all-day events
+- explicit store timezone handling
+- device timezone differing from store timezone
+- malformed timestamps/provider errors
+- overlapping events
 
-### 2. Booking transaction tests
+### 2. Dashboard derivation
 
-Mock Calendar, Sheets, LockService and provider failures.
+Cover:
 
-- two simultaneous requests for the same slot
-- overlapping requests with different starts/durations/buffers
-- lock timeout returns retryable busy and never continues unlocked
-- idempotent retry before response, after Calendar create, and after ledger finalization
-- same idempotency key with a different canonical payload is rejected
-- pending -> confirmed success
-- ledger pending succeeds / Calendar create fails
-- Calendar create succeeds / final ledger write fails
-- `SpreadsheetApp.flush()` failure and stale/read-after-write Sheet view
-- delayed Calendar visibility after a successful create
-- cancellation event absent vs transient delete failure vs confirmed deletion
-- cancellation raced with cancellation and with reschedule
-- reschedule failure before/after old delete, new create, and each ledger transition
-- reschedule to a partially overlapping later interval and partially overlapping earlier interval does not conflict with its exact old event
-- reschedule to the same interval has defined idempotent/no-op behavior; an adjacent interval does not self-conflict
-- an unrelated third-party Calendar event remains blocking when the old booking is excluded
-- new reschedule event succeeds / final ledger update fails
-- notification failure after otherwise successful create/cancel/reschedule
-- transient Calendar and Sheets failures preserve a non-success/recoverable state
-- fresh vs grace-expired stale ledger row; Calendar lookup error is not absence
-- orphan Slotflow Calendar event and arbitrary manual event are distinguished
-- owner manually moves/deletes a Slotflow event; event-ID and time drift are detected
-- owner manually creates a non-Slotflow busy event
-- reconciliation is idempotent, bidirectional for tagged events, bounded/checkpointed, and
-  mutually exclusive with conflicting mutations
+- next appointment
+- today's ordered schedule
+- free-gap calculation inside configured business hours
+- adjacent events
+- day rollover
+- empty day
+- Calendar read failure is not shown as an empty/free schedule
 
-### 3. API contract tests
+### 3. Dashboard API privacy/access
 
-- validation and normalized error responses
-- no secret leakage
-- no maintenance or management credential in query strings, redirects, logs or static assets
-- GET/query-string maintenance credentials and reconcile/cleanup mutations are rejected
-- direct requests without a browser/CORS context obey the same authorization policy
-- direct create rejects arbitrary start/end duration, unknown or mismatched service identity/name, and client-controlled buffers/notice/horizon
-- direct create derives or validates format/location according to the server-side service policy
-- direct reschedule cannot change service duration by supplying arbitrary `newStart`/`newEnd`
-- customer endpoints expose only required data
-- non-enumerating booking/token errors and spreadsheet-formula input escaping
-- cancellation/reschedule token entropy, hash-at-rest, purpose binding, expiry, revocation and replay
-- CacheService eviction/non-atomic increments/client-ID rotation cannot bypass integrity
-- rate limiting never substitutes for authentication, idempotency or booking integrity
+Cover:
 
-### 4. Google-service contract tests
+- unauthenticated requests cannot read the store schedule
+- the source Google Calendar is not made public as a deployment shortcut
+- Google OAuth access/refresh tokens and client secrets are never exposed to the PWA or static assets
+- dashboard responses contain only the fields needed for schedule display
+- authorization/provider failures are distinguishable from a genuinely empty schedule
 
-Run a small, isolated suite against a dedicated Apps Script test deployment and disposable
-Calendar/Sheet. Mocks remain the default fast suite, but cannot certify provider semantics.
+### 4. Android/PWA behavior
 
-- Advanced Calendar service is declared; unavailable service fails closed rather than falling back
-- opaque/transparent/cancelled/all-day and attendee-response fields match fixture assumptions
-- separate concurrent executions establish actual `LockService` exclusion and timeout behavior
-- Calendar creation visibility and Sheets append/flush/read visibility are observed
-- a required conflict-calendar authorization/quota/transient error is distinguishable from empty
-- deployed `doGet`/`doPost` exposure, response headers and authorization match the API contract
-- scheduled reconciliation resumes from a checkpoint without duplicate destructive action
+Cover:
 
-### 5. Owner dashboard tests
+- cached first paint before live refresh
+- live refresh replaces cached data
+- stale/offline indication
+- resume returns directly to the schedule
+- no owner-side booking CRUD dependency
 
-- cached first paint before live network response
-- live refresh updates the schedule
-- stale/offline state is obvious
-- resume returns directly to schedule
-- next appointment and free gaps remain correct across day rollover
+### 5. CI
 
-### 6. LINE tests
+Fast tests and Markdown/link checks should run on every PR/push.
 
-For simple rich-menu/LIFF entry:
+The first dashboard milestone should not wait for a future customer-booking transaction test harness.
 
-- booking page opens in LINE and normal mobile browser
-- no LINE secret in frontend assets
+## Deferred tests — customer booking writes
 
-If Messaging API is added later:
+Add these only when #7 introduces Calendar writes:
 
-- valid `x-line-signature` accepted
-- missing/invalid signature rejected before event processing
-- raw body is not modified before verification
-- duplicate/redelivered webhook is idempotent
+- two concurrent attempts for the same slot
+- immediate slot re-check before create
+- idempotent retry / double tap
+- same idempotency key with different request rejected
+- Calendar creation failure does not return success
+- lost response after successful Calendar creation does not create a duplicate on retry
+- server-side service duration/rules override client input
+- customer cancellation/reschedule semantics if those features are added
 
-## CI policy
+If Google Sheets or another ledger is later introduced, then add tests for its actual role. Do not pre-build Sheets/LockService/reconciliation tests for a component that is not part of the first product.
 
-Every PR that changes booking, time, Calendar, ledger or API logic must run the regression suite. A failing correctness test blocks merge.
+## Provider contract checks
 
-Known reference-repository failure patterns from `REFERENCE_AUDIT.md` must be represented as regression tests so they cannot silently return.
+A small isolated Google-service test may verify assumptions that mocks cannot prove, such as:
 
-Fast pure/mock tests and Markdown/link checks run on every pull request. Provider contract
-tests run on a protected scheduled/manual environment because they require Google
-credentials and quota; their last successful revision and timestamp must be visible. A mock
-test must never be described as proving actual Apps Script, Calendar, Sheets, LockService or
-CacheService semantics. Branch protection and required-check configuration must be verified
-in GitHub settings, not inferred from workflow files alone.
+- Calendar event fields used by the read adapter
+- all-day event date semantics
+- permissions/auth failures vs genuinely empty results
+- deployed Apps Script/API response behavior if Apps Script is used
+
+Mocks prove Slotflow logic, not Google's runtime behavior.
+
+## Reference audit
+
+`REFERENCE_AUDIT.md` remains useful as a list of failure patterns to avoid if/when similar booking-write mechanisms are adopted.
+
+It is not a requirement to implement every referenced protection before the Calendar-only dashboard exists.
