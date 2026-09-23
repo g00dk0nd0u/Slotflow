@@ -3,7 +3,7 @@
   'use strict';
   var CACHE_KEY = 'slotflow.dashboard.schedule.v1';
   var REFRESH_MS = 30000;
-  var state = { payload: null, refreshing: false, live: false };
+  var state = { payload: null, refreshing: false, live: false, usable: false };
   var el = {};
 
   function validInstant(value) { return typeof value === 'string' && !isNaN(Date.parse(value)); }
@@ -39,6 +39,14 @@
   function formatter(timezone, options) {
     return new Intl.DateTimeFormat('ja-JP', Object.assign({ timeZone: timezone }, options));
   }
+  function storeDate(value, timezone) {
+    var parts = new Intl.DateTimeFormat('en', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(value);
+    var result = {};
+    parts.forEach(function (part) { if (part.type !== 'literal') result[part.type] = part.value; });
+    return result.year + '-' + result.month + '-' + result.day;
+  }
   function time(value, timezone) {
     return formatter(timezone, { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
   }
@@ -54,11 +62,19 @@
     el.status.className = 'status status-' + kind;
     el.status.textContent = label;
   }
+  function focusEvent(payload, now) {
+    return payload.today.timedEvents.concat(payload.upcomingEvents).filter(function (event) {
+      return !event.allDay && new Date(event.end) > now;
+    }).sort(function (left, right) {
+      return new Date(left.start) - new Date(right.start) || new Date(left.end) - new Date(right.end);
+    })[0] || null;
+  }
   function render(payload, mode) {
     state.payload = payload;
+    state.usable = true;
     var timezone = payload.timezone;
     var now = new Date();
-    var focus = payload.today.currentOrNextEvent;
+    var focus = focusEvent(payload, now);
     if (focus) {
       var ongoing = new Date(focus.start) <= now && now < new Date(focus.end);
       el.heroLabel.textContent = ongoing ? '現在の予定' : '次の予定';
@@ -95,32 +111,41 @@
     setStatus(mode === 'live' ? 'live' : 'stale', mode === 'live' ? '最新' : '保存データ');
     updateClock();
   }
+  function unavailable() {
+    state.live = false; state.usable = false;
+    el.heroLabel.textContent = '次の予定'; el.heroTime.textContent = '—';
+    el.heroTitle.textContent = '最新情報を取得できません'; el.heroDate.textContent = '';
+    clear(el.events); el.events.appendChild(paragraph('empty', '本日の予定を確認できません'));
+    clear(el.gaps); el.gaps.appendChild(paragraph('empty', '空き時間を確認できません'));
+    clear(el.allDay); el.allDay.hidden = true; el.nextGap.textContent = ''; el.lastUpdated.textContent = '';
+  }
   function updateClock() {
     if (!state.payload) return;
     var timezone = state.payload.timezone, now = new Date();
     el.storeDate.textContent = formatter(timezone, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(now);
     el.storeClock.textContent = time(now, timezone);
+    if (state.usable && storeDate(now, timezone) !== state.payload.storeLocalDate) {
+      unavailable(); setStatus('error', '最新情報を取得できません');
+    }
   }
   function failure() {
     state.live = false;
-    setStatus(state.payload ? 'stale' : 'error', state.payload ? 'オフライン・保存データ' : '取得できません');
-    if (!state.payload) {
-      el.heroTime.textContent = '—'; el.heroTitle.textContent = '予定を取得できません';
-      el.events.textContent = ''; el.events.appendChild(paragraph('empty', '接続を確認してください'));
-      el.gaps.textContent = ''; el.gaps.appendChild(paragraph('empty', '空き時間を確認できません'));
-    }
+    if (state.usable) setStatus('stale', '更新失敗・保存データ');
+    else { unavailable(); setStatus('error', '最新情報を取得できません'); }
   }
   function refresh() {
     if (state.refreshing) return false;
     state.refreshing = true; el.refresh.disabled = true;
-    setStatus('loading', state.payload && !state.live ? '更新中・保存データ' : '更新中');
+    setStatus('loading', state.usable && !state.live ? '更新中・保存データ' : '更新中');
     function finish() { state.refreshing = false; el.refresh.disabled = false; }
     google.script.run.withSuccessHandler(function (payload) {
       finish();
       if (!validPayload(payload)) { failure(); return; }
       payload = normalizedPayload(payload);
-      state.live = true; render(payload, 'live');
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch (ignore) {}
+      state.payload = payload;
+      if (storeDate(new Date(), payload.timezone) !== payload.storeLocalDate) { unavailable(); failure(); return; }
+      state.live = true; render(payload, 'live');
     }).withFailureHandler(function () { finish(); failure(); }).getDashboardSchedule();
     return true;
   }
@@ -132,7 +157,9 @@
       var cached = JSON.parse(localStorage.getItem(CACHE_KEY));
       if (validPayload(cached)) {
         cached = normalizedPayload(cached);
-        render(cached, 'cached');
+        state.payload = cached;
+        if (storeDate(new Date(), cached.timezone) === cached.storeLocalDate) render(cached, 'cached');
+        else { updateClock(); unavailable(); setStatus('error', '最新情報を取得できません'); }
         localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
       }
     } catch (ignore) {}
@@ -140,7 +167,8 @@
     document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
     setInterval(refresh, REFRESH_MS); setInterval(updateClock, 1000); refresh();
   }
-  root.SlotflowDashboard = { init: init, refresh: refresh, validPayload: validPayload, formatTime: time, _state: state };
+  root.SlotflowDashboard = { init: init, refresh: refresh, validPayload: validPayload,
+    formatTime: time, storeDate: storeDate, _state: state };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })(this);
 </script>
