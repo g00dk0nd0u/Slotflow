@@ -22,7 +22,13 @@ The store configures weekly opening/bookable hours. Calendar busy intervals are 
 
 ## ADR-006: Partial failures must remain visible and recoverable
 
-A Calendar mutation and a ledger mutation are not an atomic database transaction. Slotflow must use explicit states such as pending/confirmed/cancelled/recovery-needed, idempotency keys, locking and reconciliation. It must not report success after only half of a cross-system operation succeeds.
+A Calendar mutation and a ledger mutation are not an atomic database transaction. Slotflow
+uses the distinct states `create_pending`, `cancel_pending`, `reschedule_pending`,
+`confirmed`, `cancelled`, `failed` and `recovery_needed`, durable idempotency, locking and
+reconciliation. `failed` proves no unresolved external side effect; `recovery_needed`
+protects every possibly occupied interval. It must not report success after only half of a
+cross-system operation succeeds. The complete transition contract is in
+[`BOOKING_STATE_MODEL.md`](BOOKING_STATE_MODEL.md).
 
 ## ADR-007: LINE is customer-facing, not the booking authority
 
@@ -63,3 +69,39 @@ Availability is not returned as free when a configured conflict calendar cannot 
 ## ADR-016: Server configuration and unambiguous instants are authoritative
 
 The backend owns service identity, duration, buffers, notice, horizon, allowed format/location, timezone, and occupancy-calendar enforcement. Mutation endpoints independently resolve and derive or validate these fields; frontend slot data and display defaults cannot relax those rules or serve as authorization. API timestamps are ISO 8601 instants with an offset or `Z`; store civil-time expansion uses an explicit IANA timezone. Numeric zero is preserved when valid rather than replaced by truthy-default expressions.
+
+## ADR-017: Durable intents, one mutation lock and operation-scoped idempotency
+
+The one-store MVP serializes create, cancel, reschedule and reconciliation repairs with one
+store/script mutation lock from the durable idempotency re-check through Calendar mutation
+and ledger finalization. Lock timeout performs no mutation. Each operation stores its caller
+key, type, booking scope, canonical request hash and result in Sheets; CacheService is never
+the integrity store. Calendar success is never reported until the ledger agrees.
+
+## ADR-018: Reschedule patches the exact tagged Calendar event
+
+An ordinary reschedule preserves booking identity and patches its existing event in place.
+Availability excludes only that exact event, not all Slotflow events. It returns to
+`confirmed` with an incremented version; `rescheduled` is audit/API vocabulary. Uncertain
+moves protect both old and target occupied intervals.
+
+## ADR-019: Private Calendar properties identify Slotflow events
+
+Slotflow-created events use Advanced Calendar API private extended properties
+`slotflowBookingId` and `slotflowVersion`; title, description and customer name are not
+identity. This supports bidirectional reconciliation without importing arbitrary owner
+events as customer bookings.
+
+## ADR-020: Proven manual Calendar edits are intentional overrides
+
+After a configurable 10-minute default grace and reliable provider evidence, Calendar time
+wins for a manually moved tagged event and confirmed absence means owner cancellation. The
+ledger/version/audit are updated and customer notification is queued. Provider errors never
+prove deletion, and old/uncertain intervals remain protected during grace.
+
+## ADR-021: Service-start policy boundaries and buffered occupancy are distinct
+
+Minimum notice and maximum advance compare against service start, both inclusively. The
+visible service interval must fit a bookable window. Buffers do not shift policy boundaries
+and may extend outside that window, but expand the half-open occupied interval used for every
+Calendar and ledger conflict check.

@@ -329,7 +329,11 @@ decision input, but Issue #2 should only be closed after repository maintainers 
 acceptance criteria and branch-protection status; Issue #3 owns the unresolved contracts
 listed below.
 
-## Issue #3 questions deliberately left open
+## Issue #3 questions deliberately left open by this audit
+
+These were audit-time handoffs, not continuing architecture gaps. Issue #3 resolves them in
+[`BOOKING_STATE_MODEL.md`](BOOKING_STATE_MODEL.md); that document is authoritative where the
+audit below says a contract remained open.
 
 1. Exact lifecycle states, legal transitions, retry ownership and terminal/manual-review
    states for create/cancel/reschedule.

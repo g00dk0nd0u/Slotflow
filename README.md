@@ -29,6 +29,7 @@ Start here:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Architecture decisions](docs/DECISIONS.md)
+- [Booking state and consistency model](docs/BOOKING_STATE_MODEL.md)
 - [Reference repository audit](docs/REFERENCE_AUDIT.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Roadmap](docs/ROADMAP.md)

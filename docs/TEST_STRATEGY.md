@@ -16,9 +16,11 @@ Run without Google services.
 - opaque one-day/multi-day all-day closures use `[start.date, end.date)` in store time
 - opaque, transparent, cancelled, self-declined and ambiguously declined event matrix
 - multiple calendars: union busy time; one mandatory-calendar read failure fails closed
-- min-notice including exactly `0`, negative/invalid/missing configuration, and the exact boundary defined by Issue #3
-- max-advance exact boundary and invalid configuration, following the Issue #3 contract
-- pre/post-buffer cases at both boundaries, with expected outcomes determined by Issue #3 rather than assumed here
+- min-notice including exactly `0`, negative/invalid/missing configuration, and inclusive
+  `service_start >= now + min_notice`
+- max-advance inclusive `service_start <= now + max_advance` and invalid configuration
+- pre/post buffers do not shift notice/horizon or visible business-hour boundaries; they may
+  extend outside business hours and expand the half-open conflict interval
 - store timezone independent of device timezone
 - malformed or offset-free API timestamps rejected
 - DST spring gap and autumn fold in at least one DST-observing timezone
@@ -33,14 +35,15 @@ Mock Calendar, Sheets, LockService and provider failures.
 - lock timeout returns retryable busy and never continues unlocked
 - idempotent retry before response, after Calendar create, and after ledger finalization
 - same idempotency key with a different canonical payload is rejected
-- pending -> confirmed success
+- `create_pending -> confirmed` success and version `0 -> 1`
 - ledger pending succeeds / Calendar create fails
 - Calendar create succeeds / final ledger write fails
 - `SpreadsheetApp.flush()` failure and stale/read-after-write Sheet view
 - delayed Calendar visibility after a successful create
 - cancellation event absent vs transient delete failure vs confirmed deletion
 - cancellation raced with cancellation and with reschedule
-- reschedule failure before/after old delete, new create, and each ledger transition
+- in-place reschedule patch failure before/after Calendar mutation and each ledger transition;
+  assert that no delete-old/create-new path exists
 - reschedule to a partially overlapping later interval and partially overlapping earlier interval does not conflict with its exact old event
 - reschedule to the same interval has defined idempotent/no-op behavior; an adjacent interval does not self-conflict
 - an unrelated third-party Calendar event remains blocking when the old booking is excluded
@@ -53,6 +56,16 @@ Mock Calendar, Sheets, LockService and provider failures.
 - owner manually creates a non-Slotflow busy event
 - reconciliation is idempotent, bidirectional for tagged events, bounded/checkpointed, and
   mutually exclusive with conflicting mutations
+- every legal transition and every illegal transition in `BOOKING_STATE_MODEL.md`
+- occupancy matrix for all seven lifecycle states, including both old and target while an
+  uncertain reschedule is pending/recovering
+- same-time reschedule is a stored no-op without version increment; successful move,
+  cancellation and reconciled manual change increment exactly once
+- five-minute scheduled reconciliation default and 10-minute manual-change grace; failed
+  reads neither start nor complete absence grace
+- identical idempotency request replays/converges; operation/booking/hash mismatch conflicts
+- API outcome matrix: clean success only after Calendar/ledger agreement, and stable
+  `processing` for an unresolved external mutation
 
 ### 3. API contract tests
 

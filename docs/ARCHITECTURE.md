@@ -53,15 +53,21 @@ Bookable time starts from configured weekly business hours and exceptions. Busy 
 
 Slotflow does **not** require owners to create specially named "availability events" in Google Calendar.
 
+Availability is the configured bookable window minus required Calendar occupancy and minus
+every active or uncertain ledger interval. The latter prevents propagation lag or a partial
+mutation from reopening possibly occupied time. Calendar owns occupancy; the ledger owns
+Slotflow identity, lifecycle, idempotency and recovery facts.
+
 ## Booking transaction model
 
-Exact implementation is finalized in issue #3, but the intended pattern is:
+The authoritative transaction and state-machine contract is
+[`BOOKING_STATE_MODEL.md`](BOOKING_STATE_MODEL.md). Its create pattern is:
 
 ```text
 request
   -> validate input / idempotency key
   -> acquire booking lock
-  -> check active pending/confirmed ledger conflicts
+  -> check active/uncertain ledger conflicts
   -> read Calendar occupancy
   -> if free, write pending ledger state
   -> create Calendar event
@@ -72,6 +78,12 @@ request
 Any failure after a mutation must leave an explicit recoverable state. Silent semantic fallback is not acceptable.
 
 Cancellation and rescheduling must follow the same principle: a Calendar failure must not be reported as a clean success simply because the ledger changed.
+
+The lifecycle states are `create_pending`, `confirmed`, `cancel_pending`,
+`reschedule_pending`, `cancelled`, `failed` and `recovery_needed`. Reschedule patches the
+exact existing tagged event in place and returns to `confirmed`; `rescheduled` is an audit/API
+outcome. A single store mutation lock covers idempotency re-check through Calendar mutation
+and ledger finalization. Notifications occur outside it.
 
 ## Time model
 
