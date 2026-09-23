@@ -74,6 +74,18 @@ The first working product needs only:
 - background refresh
 - clear stale/offline indication
 
+### Privacy and access boundary
+
+The Calendar read path is read-only but not public data access.
+
+- The source Google Calendar remains private; Slotflow must not require making it publicly readable.
+- The dashboard API must require an authorized store/dashboard context and must not expose the store schedule as an unauthenticated public endpoint.
+- Google OAuth access/refresh tokens, client secrets and equivalent credentials must never be sent to or stored in the static PWA.
+- The read adapter returns only fields needed by the dashboard. Avoid exposing unnecessary Calendar metadata, attendee data, descriptions or other private details.
+- Authorization/read failure must be surfaced as unavailable/stale data, never as an empty schedule.
+
+The exact pilot authentication mechanism can be chosen during #5 implementation, but these boundaries are requirements rather than optional productization work.
+
 ### Explicitly not required yet
 
 - Google Sheets booking ledger
