@@ -54,6 +54,37 @@ assert.deepEqual(JSON.parse(JSON.stringify(nonBlocking.freeGaps)), [
   { start: '2026-09-23T00:00:00.000Z', end: '2026-09-23T03:00:00.000Z' }
 ]);
 
+function deriveGaps(businessWindows, events = []) {
+  return JSON.parse(JSON.stringify(core.derive(events, '2026-09-23T00:00:00Z', '2026-09-23',
+    { start: '2026-09-23T00:00:00Z', end: '2026-09-24T00:00:00Z' }, businessWindows).freeGaps));
+}
+
+const fullBusinessDay = [
+  { start: '2026-09-23T09:00:00.000Z', end: '2026-09-23T18:00:00.000Z' }
+];
+assert.deepEqual(deriveGaps([
+  { start: '2026-09-23T09:00:00Z', end: '2026-09-23T12:00:00Z' },
+  { start: '2026-09-23T11:00:00Z', end: '2026-09-23T18:00:00Z' }
+]), fullBusinessDay, 'overlapping business windows merge without duplicate gaps');
+assert.deepEqual(deriveGaps([
+  { start: '2026-09-23T09:00:00Z', end: '2026-09-23T12:00:00Z' },
+  { start: '2026-09-23T12:00:00Z', end: '2026-09-23T18:00:00Z' }
+]), fullBusinessDay, 'adjacent business windows merge');
+assert.deepEqual(deriveGaps([
+  { start: '2026-09-23T09:00:00Z', end: '2026-09-23T12:00:00Z' },
+  { start: '2026-09-23T13:00:00Z', end: '2026-09-23T18:00:00Z' }
+]), [
+  { start: '2026-09-23T09:00:00.000Z', end: '2026-09-23T12:00:00.000Z' },
+  { start: '2026-09-23T13:00:00.000Z', end: '2026-09-23T18:00:00.000Z' }
+], 'separated business windows remain separate');
+assert.deepEqual(deriveGaps([
+  { start: '2026-09-23T09:00:00Z', end: '2026-09-23T12:00:00Z' },
+  { start: '2026-09-23T11:00:00Z', end: '2026-09-23T18:00:00Z' }
+], [timed({ start: { dateTime: '2026-09-23T12:00:00Z' }, end: { dateTime: '2026-09-23T13:00:00Z' } })]), [
+  { start: '2026-09-23T09:00:00.000Z', end: '2026-09-23T12:00:00.000Z' },
+  { start: '2026-09-23T13:00:00.000Z', end: '2026-09-23T18:00:00.000Z' }
+], 'busy events subtract from a merged business window');
+
 const derived = core.derive([timed(), timed({ id: 'later', start: { dateTime: '2026-09-23T04:00:00Z' }, end: { dateTime: '2026-09-23T05:00:00Z' } })],
   '2026-09-23T01:30:00Z', '2026-09-23',
   { start: '2026-09-23T00:00:00Z', end: '2026-09-24T00:00:00Z' },

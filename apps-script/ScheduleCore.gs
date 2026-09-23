@@ -65,7 +65,7 @@ var ScheduleCore = (function () {
     var allDayBusy = allDay.some(function (event) { return event.busy; });
     var busyTimed = timed.filter(function (event) { return event.busy; });
     var gaps = [];
-    businessWindows.forEach(function (window) {
+    mergeIntervals(businessWindows).forEach(function (window) {
       if (!allDayBusy) gaps = gaps.concat(freeGaps(window, busyTimed));
     });
     return { allDayEvents: allDay, timedEvents: timed, currentOrNextEvent: currentOrNext, freeGaps: gaps };
