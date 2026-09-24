@@ -1,16 +1,33 @@
 function getBookingOptions() {
   try {
     var config = CustomerBookingConfig.load();
-    return { ok: true, services: config.services.map(function (service) { return { id: service.id, name: service.name }; }) };
+    var now = new Date();
+    return {
+      ok: true,
+      timezone: config.timezone,
+      storeLocalDate: Utilities.formatDate(now, config.timezone, 'yyyy-MM-dd'),
+      bookingHorizonEndDate: Utilities.formatDate(
+        new Date(now.getTime() + config.horizonDays * 24 * 60 * 60000), config.timezone, 'yyyy-MM-dd'),
+      services: config.services.map(function (service) { return { id: service.id, name: service.name }; })
+    };
   } catch (error) { return failure_('UNAVAILABLE', '予約情報を取得できません'); }
 }
 
 function getAvailability(request) {
+  var config;
   try {
-    var config = CustomerBookingConfig.load();
+    config = CustomerBookingConfig.load();
+  } catch (error) {
+    return failure_('UNAVAILABLE', '空き時間を取得できません');
+  }
+  try {
     var input = validateAvailabilityRequest_(request, config, new Date());
+  } catch (error) {
+    return failure_('INVALID_REQUEST', '入力内容を確認してください');
+  }
+  try {
     return availability_(input.date, input.service, config, new Date());
-  } catch (error) { return failure_(error.code || 'INVALID_REQUEST', error.publicMessage || '入力内容を確認してください'); }
+  } catch (error) { return failure_('UNAVAILABLE', '空き時間を取得できません'); }
 }
 
 function createBooking(request) {
@@ -52,7 +69,8 @@ function createBooking(request) {
     if (!event || !event.id) throw new Error('Calendar insert failed');
     return success_(input.requestId, input.start, end);
   } catch (error) {
-    return failure_(error.code || 'BOOKING_FAILED', error.publicMessage || '予約を確定できませんでした');
+    if (error.code === 'INVALID_REQUEST') return failure_('INVALID_REQUEST', '入力内容を確認してください');
+    return failure_('UNAVAILABLE', '予約を確定できませんでした');
   } finally {
     if (lock && lock.hasLock()) lock.releaseLock();
   }

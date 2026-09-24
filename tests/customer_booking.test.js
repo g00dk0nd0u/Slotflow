@@ -17,6 +17,7 @@ function harness(options = {}) {
   const Calendar = { Events: {
     list(id, params) {
       assert.equal(id, 'private-calendar');
+      if (options.listFailure) throw new Error('provider details must stay private');
       if (params.privateExtendedProperty) return { items: options.duplicates || [] };
       return { items: events };
     },
@@ -43,7 +44,7 @@ function harness(options = {}) {
   }
   const context = {
     Date: FakeDate, Calendar, LockService: { getScriptLock() { return lock; } },
-    CustomerBookingConfig: { load() { return config; } },
+    CustomerBookingConfig: { load() { if (options.configFailure) throw new Error('bad secret config'); return config; } },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
       computeDigest(algorithm, value) { return Array.from(crypto.createHash(algorithm).update(value, 'utf8').digest()); },
@@ -71,6 +72,10 @@ function harness(options = {}) {
 const request = { serviceId: 'standard', start: '2030-01-02T00:00:00.000Z', name: '山田 太郎', contact: '', requestId: 'request-id-00001' };
 const occupied = [{ id: 'secret', summary: '秘密の顧客名', start: { dateTime: '2030-01-02T00:30:00Z' }, end: { dateTime: '2030-01-02T01:30:00Z' } }];
 const availabilityHarness = harness({ events: occupied });
+const bookingOptions = availabilityHarness.context.getBookingOptions();
+assert.equal(bookingOptions.timezone, 'Asia/Tokyo');
+assert.equal(bookingOptions.storeLocalDate, '2030-01-01');
+assert.equal(bookingOptions.bookingHorizonEndDate, '2030-03-02');
 const available = availabilityHarness.context.getAvailability({ date: '2030-01-02', serviceId: 'standard' });
 assert.equal(available.ok, true);
 assert.deepEqual(JSON.parse(JSON.stringify(available.slots)), [
@@ -79,6 +84,14 @@ assert.deepEqual(JSON.parse(JSON.stringify(available.slots)), [
 ], 'occupancy removes every overlapping candidate');
 assert.equal(JSON.stringify(available).includes('秘密'), false, 'availability never exposes event content');
 assert.deepEqual(Object.keys(available).sort(), ['date', 'ok', 'serviceId', 'slots']);
+
+const invalidAvailability = harness().context.getAvailability({ date: 'bad', serviceId: 'standard' });
+assert.equal(invalidAvailability.error.code, 'INVALID_REQUEST');
+const unavailableAvailability = harness({ listFailure: true }).context
+  .getAvailability({ date: '2030-01-02', serviceId: 'standard' });
+assert.equal(unavailableAvailability.error.code, 'UNAVAILABLE');
+assert.equal(JSON.stringify(unavailableAvailability).includes('provider details'), false);
+assert.equal(harness({ configFailure: true }).context.getBookingOptions().error.code, 'UNAVAILABLE');
 
 const stale = harness({ events: occupied });
 assert.equal(stale.context.createBooking(request).error.code, 'SLOT_UNAVAILABLE', 'slot is re-read under lock');
@@ -127,7 +140,7 @@ assert.equal(duplicate.inserts(), 0);
 const failedInsert = harness({ insertFailure: true });
 const failure = failedInsert.context.createBooking(request);
 assert.equal(failure.ok, false, 'Calendar insertion failure never confirms');
-assert.equal(failure.error.code, 'BOOKING_FAILED');
+assert.equal(failure.error.code, 'UNAVAILABLE');
 assert.equal(failedInsert.locked(), false, 'insertion failure releases lock');
 
 const success = harness();
