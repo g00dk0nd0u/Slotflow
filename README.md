@@ -64,6 +64,7 @@ Start here:
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Calendar read adapter operations](docs/CALENDAR_READ_ADAPTER.md)
 - [Android dashboard pilot](docs/DASHBOARD.md)
+- [Customer availability](docs/CUSTOMER_AVAILABILITY.md)
 - [Reference repository audit](docs/REFERENCE_AUDIT.md)
 - [MVP roadmap issue #1](https://github.com/g00dk0nd0u/Slotflow/issues/1)
 
