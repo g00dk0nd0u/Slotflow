@@ -4,57 +4,56 @@ Lightweight Google Calendar companion for small appointment-based businesses.
 
 ## Product north star
 
-The store manager uses **Google Calendar for almost all schedule operations**. Slotflow does not replace Google Calendar and does not ask the manager to maintain the same appointment twice.
+The store manager uses **Google Calendar for all actual appointment entry and schedule operations**. Slotflow does not replace Google Calendar and does not ask the manager to maintain the same appointment twice.
 
 Slotflow has two jobs:
 
-1. **Read Google Calendar and present it better** on a dedicated Android tablet.
-2. **Later, let customers book from Web/LINE** by writing appointments into Google Calendar.
+1. **Owner display:** read Google Calendar and present the schedule clearly on a dedicated Android tablet.
+2. **Customer availability:** read the same Calendar and show only derived availability on a mobile page.
 
-## First useful milestone
+Actual reservations are confirmed **by phone**. After the call, the store manager enters the appointment into Google Calendar. Slotflow then reflects the new Calendar state and removes the occupied time from customer availability.
 
-```text
-Google Calendar
-      |
-      v
-small read API
-      |
-      v
-Android tablet PWA
-```
-
-The tablet shows:
-
-- next appointment
-- today's schedule
-- free gaps / next available gap
-- stale/offline status when live data is unavailable
-
-The manager continues to add, move, delete and edit appointments in Google Calendar. Slotflow simply reflects those changes.
-
-For this first milestone there is **no Google Sheets booking ledger, no owner-side booking CRUD UI, and no booking state machine**.
-
-## Later customer booking
-
-After the Calendar dashboard works, a customer flow can be added:
+## MVP flow
 
 ```text
-LINE / Web
-    |
-    v
-Slotflow booking page
-    |
-    v
-Google Calendar
+Customer availability page
+(service -> ○/△/× -> startable times)
+            |
+            v
+     Phone the store
+            |
+            v
+Manager confirms verbally
+            |
+            v
+Manager enters appointment in Google Calendar
+            |
+            +--------------------+
+            |                    |
+            v                    v
+Owner tablet display     Customer availability refresh
 ```
 
-Only the minimum safeguards needed for customer writes—slot re-checking, duplicate-write protection and clear Calendar write failure handling—should be added. A second booking database is not a default requirement.
+Google Calendar remains the operational source of truth.
+
+## Customer UI
+
+The MVP customer page is read-only:
+
+- service selection
+- compact calendar / multi-week availability
+- ○ / △ / × date status
+- startable times or ranges for the selected service duration
+- clear **電話で確認する** `tel:` action
+
+It does **not** collect customer name/contact and does **not** create, update or delete Calendar events.
 
 ## Current status
 
 - Reference repository audit: complete
-- Architecture: being simplified around the Calendar-first product model
-- Calendar read adapter and authenticated Apps Script dashboard: implemented
+- Calendar read adapter: implemented
+- Authenticated owner Apps Script dashboard: implemented
+- Customer online-write experiment from PR #19: superseded; to be reduced to read-only availability
 
 Start here:
 
@@ -73,20 +72,20 @@ Start here:
 First release:
 
 - single owner / single location
-- generic appointment business
 - Google Calendar as the operational schedule
-- Android tablet display
-- customer booking into Calendar later
-- LINE entry point later
+- owner Android tablet display
+- customer read-only availability display
+- phone reservation handoff
+- LINE entry point to the same availability page later
 
 Explicitly deferred:
 
+- customer online booking / Calendar writes
 - owner-side duplicate calendar/admin system
 - mandatory Google Sheets ledger
-- large booking lifecycle state machine
+- booking transaction state machine / LockService flow
 - multi-location/franchise
 - payment/POS/inventory/payroll/full CRM
-- telephone integration
 - conversational LINE bot infrastructure unless its value is proven
 
 ## License
