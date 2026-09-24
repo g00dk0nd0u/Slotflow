@@ -53,7 +53,7 @@ It does **not** collect customer name/contact and does **not** create, update or
 - Reference repository audit: complete
 - Calendar read adapter: implemented
 - Authenticated owner Apps Script dashboard: implemented
-- Customer online-write experiment from PR #19: superseded; cleanup pending under Issue #7
+- Customer read-only availability and phone handoff: implemented
 
 Start here:
 

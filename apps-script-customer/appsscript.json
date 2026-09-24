@@ -1,7 +1,7 @@
 {
   "timeZone": "Etc/UTC",
   "dependencies": { "enabledAdvancedServices": [{ "userSymbol": "Calendar", "serviceId": "calendar", "version": "v3" }] },
-  "oauthScopes": ["https://www.googleapis.com/auth/calendar.events"],
+  "oauthScopes": ["https://www.googleapis.com/auth/calendar.events.readonly"],
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8"
 }

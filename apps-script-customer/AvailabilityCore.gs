@@ -1,4 +1,4 @@
-var CustomerBookingCore = (function () {
+var CustomerAvailabilityCore = (function () {
   function localInstant(date, clock, timezone) {
     var parts = date.split('-').map(Number), time = clock.split(':').map(Number);
     var wallUtc = Date.UTC(parts[0], parts[1] - 1, parts[2], time[0], time[1]);
@@ -43,8 +43,26 @@ var CustomerBookingCore = (function () {
     return result;
   }
 
-  function containsSlot(available, start) {
-    return available.some(function (slot) { return slot.start === start; });
+  function status(slotCount) {
+    return slotCount === 0 ? '×' : slotCount <= 2 ? '△' : '○';
   }
-  return { localInstant: localInstant, busyIntervals: busyIntervals, slots: slots, containsSlot: containsSlot };
+
+  function ranges(slots, timezone, stepMinutes) {
+    if (!slots.length) return [];
+    var result = [], start = slots[0].start, previous = slots[0].start;
+    for (var i = 1; i < slots.length; i += 1) {
+      if (Date.parse(slots[i].start) - Date.parse(previous) !== stepMinutes * 60000) {
+        result.push(clock(start, timezone) + ' ～ ' + clock(previous, timezone));
+        start = slots[i].start;
+      }
+      previous = slots[i].start;
+    }
+    result.push(clock(start, timezone) + ' ～ ' + clock(previous, timezone));
+    return result;
+  }
+
+  function clock(instant, timezone) {
+    return Utilities.formatDate(new Date(instant), timezone, 'HH:mm');
+  }
+  return { localInstant: localInstant, busyIntervals: busyIntervals, slots: slots, status: status, ranges: ranges };
 })();
