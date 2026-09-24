@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in tests/*.test.js; do
+            echo "Running $test"
+            node "$test"
+          done
+
+      - name: Check Apps Script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find apps-script apps-script-customer -type f -name '*.gs' -print0 \
+            | xargs -0 -n1 node --check
+
+      - name: Validate Apps Script manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          for (const file of [
+            'apps-script/appsscript.json',
+            'apps-script-customer/appsscript.json'
+          ]) {
+            JSON.parse(fs.readFileSync(file, 'utf8'));
+            console.log(`Valid JSON: ${file}`);
+          }
+          NODE
