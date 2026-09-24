@@ -1,53 +1,54 @@
 # Issue Plan
 
-Slotflow now follows a Calendar-first implementation order.
+Slotflow follows a Calendar-first, read-only customer MVP.
 
 ## Product rule
 
-The store manager operates almost entirely in Google Calendar. Slotflow should first become a clear, always-ready display of that Calendar, then later add customer booking into it.
+The store manager operates the real schedule entirely in Google Calendar. Slotflow has two read surfaces: an owner tablet schedule and a customer availability page. Actual reservations are confirmed by phone and entered by the manager in Google Calendar.
 
 ## Order
 
 1. **#2 — Audit ContextLab/scheduler before reusing any implementation**  
-   Complete. Keep as reference material only.
+   Complete. Reference material only.
 
 2. **#5 — Implement Google Calendar read adapter for the owner dashboard**  
-   Small read path only. No Sheets/state machine. Protect the private Calendar behind an authenticated/minimally exposed dashboard API.
+   Complete.
 
 3. **#6 — Build instant-access Android Calendar dashboard PWA**  
-   Can prototype with fixtures immediately; connects to #5.
+   Complete.
 
-4. **#4 — Add lightweight CI/tests for Calendar read + dashboard**  
-   Runs alongside #5/#6; do not block the read-only milestone on future booking-write architecture.
+4. **#4 — Add lightweight CI/tests for Calendar read + availability display**  
+   Cover both owner display and customer read-only availability.
 
-5. **#3 — Define minimal safeguards for customer booking writes**  
-   Deferred until customer booking is about to be implemented.
+5. **#7 — Build customer read-only availability page with phone handoff**  
+   Service -> ○/△/× -> startable times -> 電話で確認する. No Calendar writes.
 
-6. **#7 — Add minimal customer booking flow that writes to Google Calendar**  
-   Re-check availability, write Calendar event, protect against duplicate writes.
+6. **#8 — Add LINE entry point to the read-only availability page**  
+   Rich menu/profile link on top of #7.
 
-7. **#8 — Add LINE entry point without requiring a webhook**  
-   Rich menu / LIFF entry on top of #7.
+7. **#10 — Plan zero-friction Google Calendar read onboarding for non-technical store owners**
 
-8. **#10 — Plan zero-friction Google onboarding for non-technical store owners**
+8. **#11 — Hardening, quota validation and first-store pilot**
 
-9. **#11 — Hardening, quota validation and first-store pilot**
+9. **#9 — Conversational LINE availability**  
+   Deferred until chat automation is proven useful.
 
-10. **#9 — Secure conversational LINE webhook**  
-    Deferred until chat automation is actually required and depends on the customer booking path, not the read-only Calendar adapter.
+## Superseded
+
+**#3 — customer booking write safeguards** is not part of the MVP. It remains closed/not planned. A future online-booking product would require an explicit new product decision.
 
 ## Critical path
 
-First useful product:
+Owner foundation:
 
-`#5 + #6 + lightweight #4`
+`#5 + #6`
 
-Then customer booking:
+Then safety net and customer availability:
 
-`#3 -> #7 -> #8`
+`#4 + #7`
 
-Then productization/pilot:
+Then distribution/productization:
 
-`#10 -> #11`
+`#8 -> #10 -> #11`
 
-The first useful product does **not** depend on a booking ledger, transaction state machine or LINE integration.
+The MVP does **not** depend on Calendar writes from customers, LockService, idempotent write tokens, a booking ledger or transaction state machine.
