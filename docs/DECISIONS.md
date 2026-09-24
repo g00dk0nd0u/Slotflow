@@ -1,65 +1,52 @@
 # Architecture Decisions
 
 ## ADR-001: Single owner / single location first
+The MVP optimizes for one owner operating one location. Multi-tenant, franchise and multi-staff resource scheduling are deferred.
 
-The MVP optimizes for one owner operating one location. Multi-tenant, franchise and multi-staff resource scheduling are intentionally deferred.
+## ADR-002: Google Calendar is the only operational schedule
+The manager creates, moves and deletes actual appointments in Google Calendar. Slotflow reflects those changes and does not maintain a second owner-side schedule.
 
-## ADR-002: Android tablet is Slotflow's primary owner surface, but not the primary editing tool
+## ADR-003: Owner tablet is a display, not an editing tool
+The dedicated Android tablet is optimized for instant schedule visibility. Routine schedule editing stays in Google Calendar.
 
-The dedicated Android tablet is optimized for instant schedule visibility. The manager continues to edit the schedule in Google Calendar; Slotflow does not duplicate Calendar CRUD for the owner in the first milestone.
+## ADR-004: Customer MVP is read-only availability
+The customer page displays availability derived from Calendar occupancy. It does not create, update or delete appointments.
 
-## ADR-003: Google Calendar is the operational source of truth
+## ADR-005: Reservations are confirmed by phone
+The customer checks availability and calls the store. After verbal confirmation, the manager enters the appointment into Google Calendar. Slotflow then reflects the newly occupied time.
 
-Google Calendar represents the real store schedule. Manager-created, Gemini-created and future Slotflow-created appointments are all ordinary Calendar events. Manager add/move/delete actions in Calendar are accepted as the real schedule and reflected by Slotflow rather than reconciled back to another owner-side database.
+## ADR-006: Business hours are calculation rules
+Configured business hours plus service duration determine candidate start times. Calendar occupancy remains authoritative.
 
-## ADR-004: No mandatory parallel booking ledger for the first milestone
+## ADR-007: No customer personal-data form in the MVP
+The read-only customer page does not collect customer name/contact information because the web app itself does not book.
 
-The Calendar-read/dashboard milestone does not require Google Sheets or another booking ledger. A ledger may be introduced later only if customer-booking requirements such as idempotency or metadata storage demonstrably need it.
+## ADR-008: No booking transaction machinery in the MVP
+Customer Calendar writes, `LockService`, request-id idempotency, booking lifecycle state, Sheets ledgers and reconciliation are unnecessary while the customer surface is read-only.
 
-## ADR-005: Business hours are a calculation rule, not a second calendar
+## ADR-009: Customer output is privacy-minimized
+Customer-facing output contains only service/date availability, startable times/ranges and store timezone. It never includes appointment titles, customer details, descriptions, attendees, raw Calendar objects or credentials.
 
-Configured weekly hours are used to calculate free gaps and future customer-bookable time. Google Calendar occupancy remains authoritative.
+## ADR-010: LINE is only an entry point initially
+A LINE Official Account rich-menu/profile link may open the read-only availability page. LIFF is optional. A Messaging API webhook is not required for the MVP.
 
-## ADR-006: Complex booking transaction state is deferred until customer writes exist
+## ADR-011: Secure LINE webhooks require a header-capable endpoint
+If conversational LINE automation is later justified, signature verification must validate the raw request body against `x-line-signature`. Apps Script `doPost(e)` must not be assumed to provide that trust boundary.
 
-Pending/confirmed/recovery state machines, LockService transactions and Calendar/ledger reconciliation are not prerequisites for the read-only dashboard. When customer booking writes are introduced, implement only the minimum safeguards required to prevent duplicate writes and false confirmation.
+## ADR-012: Reference repositories are patterns, not dependencies
+Existing OSS is audited and selectively adapted. Slotflow does not inherit a full online-booking architecture merely because one exists.
 
-## ADR-007: LINE is customer-facing, not the schedule authority
+## ADR-013: Pilot setup and productized onboarding are separate
+The first-store pilot may use developer-assisted Google configuration. A managed product should later reduce owner setup to sign-in/consent, calendar selection and basic store configuration.
 
-LINE Official Account / LIFF provides customer entry where useful. Google Calendar remains the operational schedule.
+## ADR-014: Gemini/Google voice interaction is ordinary Calendar input
+Events created through normal Google/Gemini workflows are treated exactly like other Calendar events.
 
-## ADR-008: LINE MVP does not require a Messaging API webhook
+## ADR-015: Opaque all-day events close covered store-local dates
+On configured occupancy calendars, an opaque all-day event blocks the half-open date range `[start.date, end.date)` in the store timezone. Cancelled or transparent events do not block.
 
-A rich-menu/profile link can open the booking page or LIFF entry directly. This minimizes infrastructure and attack surface.
+## ADR-016: Required Calendar reads fail visibly
+If required Calendar data cannot be read, Slotflow distinguishes that failure from an actually empty/free schedule. Missing provider data must never appear as free time.
 
-## ADR-009: Secure LINE webhooks require a header-capable endpoint
-
-If conversational Messaging API automation is later added, LINE signature verification requires access to the raw body and `x-line-signature` header. Apps Script web-app `doPost(e)` must not be assumed to provide this secure webhook boundary.
-
-## ADR-010: Reference repositories are patterns, not dependencies
-
-Existing OSS is audited and selectively adapted. Slotflow does not fork a complete scheduling product merely because it already exists.
-
-## ADR-011: Pilot setup and productized onboarding are separate problems
-
-The first-store pilot may use developer-assisted Google configuration. A managed product should later reduce owner setup to Google sign-in/consent + calendar selection.
-
-## ADR-012: Gemini/Google voice interaction is ordinary Calendar input
-
-Events created through normal Google/Gemini workflows are treated exactly like other Calendar events. Slotflow does not depend on Gemini but naturally reflects its Calendar output.
-
-## ADR-013: Telephone integration is out of scope
-
-Slotflow focuses on Calendar visibility, customer web booking and LINE entry.
-
-## ADR-014: Opaque all-day events close their covered store-local dates
-
-On configured occupancy calendars, an opaque all-day event blocks the half-open date range `[start.date, end.date)` in the store timezone. Cancelled or explicitly transparent events do not block.
-
-## ADR-015: Required Calendar reads fail visibly
-
-If required Calendar data cannot be read, Slotflow must distinguish that failure from an actually empty/free schedule. It must not silently show free time based on missing provider data.
-
-## ADR-016: Server rules and explicit time representation are authoritative for customer booking
-
-When customer booking is introduced, service identity, duration, buffers, notice/horizon rules and timezone are enforced server-side. API timestamps use explicit ISO 8601 instants; store civil-time expansion uses an explicit IANA timezone. Frontend values are not authorization.
+## ADR-017: Store timezone and server rules are authoritative
+Service duration, business hours and store timezone are enforced server-side when deriving availability. Client/device timezone is not authoritative.
