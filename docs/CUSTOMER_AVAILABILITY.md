@@ -21,7 +21,17 @@ The customer service needs server-side configuration for at least:
 - service name/duration;
 - store phone number.
 
-Use least-privilege Calendar **read** access.
+Script Properties are authoritative and use these keys:
+
+- `SLOTFLOW_CALENDAR_ID`: private operational Calendar ID;
+- `SLOTFLOW_STORE_NAME`: customer-visible store/brand name;
+- `SLOTFLOW_STORE_PHONE`: customer-visible phone number used by the `tel:` action;
+- `SLOTFLOW_STORE_TIMEZONE`: IANA timezone such as `Asia/Tokyo`;
+- `SLOTFLOW_BUSINESS_HOURS_JSON`: weekday (`0` = Sunday through `6` = Saturday) to opening-range arrays;
+- `SLOTFLOW_SERVICES_JSON`: array of service `id`, `name` and `durationMinutes` objects.
+
+Use the least-privilege Calendar Events **read-only** OAuth scope,
+`https://www.googleapis.com/auth/calendar.events.readonly`.
 
 ## Availability contract
 
