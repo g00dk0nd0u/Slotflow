@@ -53,17 +53,33 @@ assert.equal(elements.date.max, '2030-03-03', 'date maximum comes from the serve
 elements.service.value = 'standard';
 elements.date.value = '2030-01-02';
 elements.date.onchange();
-calls.at(-1).successHandler({
+const availabilityA = calls.at(-1);
+elements.service.value = 'premium';
+elements.date.value = '2030-01-03';
+elements.service.onchange();
+const availabilityB = calls.at(-1);
+availabilityB.successHandler({
+  ok: true, slots: [{ start: '2030-01-03T01:00:00.000Z', end: '2030-01-03T02:00:00.000Z' }]
+});
+availabilityA.successHandler({
   ok: true, slots: [{ start: '2030-01-02T00:00:00.000Z', end: '2030-01-02T01:00:00.000Z' }]
 });
-assert.equal(elements.times.children[0].textContent, 'Asia/Tokyo:2030-01-02T00:00:00.000Z',
+assert.equal(elements.times.children.length, 1, 'stale response does not add old slots');
+assert.equal(elements.times.children[0].textContent, 'Asia/Tokyo:2030-01-03T01:00:00.000Z',
   'slot display uses the configured store timezone');
-elements.times.children[0].onclick();
+assert.equal(elements.confirm.disabled, true, 'latest response does not select a slot automatically');
 elements.name.value = '山田 太郎';
+const callCountBeforeSelection = calls.length;
+elements.confirm.onclick();
+assert.equal(calls.length, callCountBeforeSelection, 'confirm cannot submit a stale slot');
+assert.equal(elements.confirm.disabled, true, 'confirm stays disabled without a latest-response slot selection');
+elements.times.children[0].onclick();
 
 elements.confirm.onclick();
 const firstAttempt = calls.at(-1);
 assert.equal(firstAttempt.method, 'createBooking');
+assert.equal(firstAttempt.arg.start, '2030-01-03T01:00:00.000Z', 'only the latest response slot is selectable');
+assert.equal(firstAttempt.arg.serviceId, 'premium');
 firstAttempt.failureHandler(new Error('ambiguous transport failure'));
 elements.confirm.onclick();
 const retry = calls.at(-1);
