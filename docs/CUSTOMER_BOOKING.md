@@ -17,7 +17,7 @@ The server-owned service catalog currently contains one 60-minute `standard` ser
 1. `getAvailability` validates the service and date, expands configured business hours in the store timezone, reads Calendar occupancy, and returns only normalized start/end instants.
 2. `createBooking` validates the name, optional contact, service, start instant, and request ID.
 3. It acquires the script lock, looks for an existing event with the same private `requestId`, re-reads availability, and rejects a stale/conflicting slot.
-4. It inserts the Calendar event with `requestId` and `serviceId` in `extendedProperties.private`, then returns a small confirmation. The lock is released on every path. No Sheet or secondary ledger is used.
+4. It inserts the Calendar event with `slotflowRequestId` and `slotflowServiceId` in `extendedProperties.private`, then returns a small confirmation. The browser keeps that request ID across an ambiguous transport failure. The lock is released on every path. No Sheet or secondary ledger is used.
 
 ## Deployment boundary
 

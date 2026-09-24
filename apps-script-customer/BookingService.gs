@@ -1,16 +1,29 @@
 function getBookingOptions() {
   try {
     var config = CustomerBookingConfig.load();
-    return { ok: true, services: config.services.map(function (service) { return { id: service.id, name: service.name }; }) };
+    var now = new Date();
+    return {
+      ok: true,
+      timezone: config.timezone,
+      storeLocalDate: Utilities.formatDate(now, config.timezone, 'yyyy-MM-dd'),
+      bookingHorizonEndDate: Utilities.formatDate(
+        new Date(now.getTime() + config.horizonDays * 24 * 60 * 60000), config.timezone, 'yyyy-MM-dd'),
+      services: config.services.map(function (service) { return { id: service.id, name: service.name }; })
+    };
   } catch (error) { return failure_('UNAVAILABLE', '予約情報を取得できません'); }
 }
 
 function getAvailability(request) {
+  var config, input;
   try {
-    var config = CustomerBookingConfig.load();
-    var input = validateAvailabilityRequest_(request, config, new Date());
+    config = CustomerBookingConfig.load();
+  } catch (error) { return failure_('UNAVAILABLE', '空き時間を取得できません'); }
+  try {
+    input = validateAvailabilityRequest_(request, config, new Date());
+  } catch (error) { return failure_('INVALID_REQUEST', '入力内容を確認してください'); }
+  try {
     return availability_(input.date, input.service, config, new Date());
-  } catch (error) { return failure_(error.code || 'INVALID_REQUEST', error.publicMessage || '入力内容を確認してください'); }
+  } catch (error) { return failure_('UNAVAILABLE', '空き時間を取得できません'); }
 }
 
 function createBooking(request) {
@@ -25,7 +38,7 @@ function createBooking(request) {
     var duplicate = findByRequestId_(config.calendarId, input.requestId, input.start);
     if (duplicate) {
       if (!duplicate.extendedProperties || !duplicate.extendedProperties.private ||
-          duplicate.extendedProperties.private.serviceId !== input.service.id) {
+          duplicate.extendedProperties.private.slotflowServiceId !== input.service.id) {
         return failure_('INVALID_REQUEST', 'リクエストIDが一致しません');
       }
       return success_(input.requestId, duplicate.start.dateTime, duplicate.end.dateTime);
@@ -42,7 +55,7 @@ function createBooking(request) {
       description: input.contact ? '連絡先: ' + input.contact : undefined,
       start: { dateTime: input.start, timeZone: config.timezone },
       end: { dateTime: end, timeZone: config.timezone },
-      extendedProperties: { private: { requestId: input.requestId, serviceId: input.service.id } }
+      extendedProperties: { private: { slotflowRequestId: input.requestId, slotflowServiceId: input.service.id } }
     }, config.calendarId);
     if (!event || !event.id) throw new Error('Calendar insert failed');
     return success_(input.requestId, input.start, end);
@@ -81,9 +94,9 @@ function listEvents_(calendarId, timeMin, timeMax, extra) {
 
 function findByRequestId_(calendarId, requestId, start) {
   return listEvents_(calendarId, null, null,
-    { privateExtendedProperty: 'requestId=' + requestId }).filter(function (event) {
+    { privateExtendedProperty: 'slotflowRequestId=' + requestId }).filter(function (event) {
       return event.status !== 'cancelled' && event.extendedProperties && event.extendedProperties.private &&
-        event.extendedProperties.private.requestId === requestId;
+        event.extendedProperties.private.slotflowRequestId === requestId;
     })[0] || null;
 }
 

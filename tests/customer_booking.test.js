@@ -16,7 +16,10 @@ function harness(options = {}) {
   const Calendar = { Events: {
     list(id, params) {
       assert.equal(id, 'private-calendar');
-      if (params.privateExtendedProperty) return { items: options.duplicates || [] };
+      if (params.privateExtendedProperty) {
+        assert.equal(params.privateExtendedProperty, 'slotflowRequestId=request-id-00001');
+        return { items: options.duplicates || [] };
+      }
       return { items: events };
     },
     insert(resource, id) {
@@ -24,7 +27,7 @@ function harness(options = {}) {
       if (options.insertFailure) throw new Error('insert failed');
       assert.equal(id, 'private-calendar');
       assert.deepEqual(JSON.parse(JSON.stringify(resource.extendedProperties.private)),
-        { requestId: 'request-id-00001', serviceId: 'standard' });
+        { slotflowRequestId: 'request-id-00001', slotflowServiceId: 'standard' });
       return { id: 'new-event' };
     }
   } };
@@ -63,6 +66,10 @@ function harness(options = {}) {
 const request = { serviceId: 'standard', start: '2030-01-02T00:00:00.000Z', name: '山田 太郎', contact: '', requestId: 'request-id-00001' };
 const occupied = [{ id: 'secret', summary: '秘密の顧客名', start: { dateTime: '2030-01-02T00:30:00Z' }, end: { dateTime: '2030-01-02T01:30:00Z' } }];
 const availabilityHarness = harness({ events: occupied });
+const options = availabilityHarness.context.getBookingOptions();
+assert.equal(options.timezone, 'Asia/Tokyo');
+assert.equal(options.storeLocalDate, '2030-01-01');
+assert.equal(options.bookingHorizonEndDate, '2030-03-02');
 const available = availabilityHarness.context.getAvailability({ date: '2030-01-02', serviceId: 'standard' });
 assert.equal(available.ok, true);
 assert.deepEqual(JSON.parse(JSON.stringify(available.slots)), [
@@ -71,6 +78,12 @@ assert.deepEqual(JSON.parse(JSON.stringify(available.slots)), [
 ], 'occupancy removes every overlapping candidate');
 assert.equal(JSON.stringify(available).includes('秘密'), false, 'availability never exposes event content');
 assert.deepEqual(Object.keys(available).sort(), ['date', 'ok', 'serviceId', 'slots']);
+const providerFailure = harness();
+providerFailure.context.Calendar.Events.list = function () { throw new Error('private provider detail'); };
+const unavailable = providerFailure.context.getAvailability({ date: '2030-01-02', serviceId: 'standard' });
+assert.equal(unavailable.error.code, 'UNAVAILABLE');
+assert.equal(JSON.stringify(unavailable).includes('private provider detail'), false);
+assert.equal(harness().context.getAvailability({ date: 'not-a-date', serviceId: 'standard' }).error.code, 'INVALID_REQUEST');
 
 const stale = harness({ events: occupied });
 assert.equal(stale.context.createBooking(request).error.code, 'SLOT_UNAVAILABLE', 'slot is re-read under lock');
@@ -83,7 +96,7 @@ assert.equal(lockFailure.inserts(), 0);
 
 const existing = {
   id: 'existing', status: 'confirmed', start: { dateTime: request.start }, end: { dateTime: '2030-01-02T01:00:00.000Z' },
-  extendedProperties: { private: { requestId: request.requestId, serviceId: request.serviceId } }
+  extendedProperties: { private: { slotflowRequestId: request.requestId, slotflowServiceId: request.serviceId } }
 };
 const duplicate = harness({ duplicates: [existing] });
 const duplicateResult = duplicate.context.createBooking(request);
