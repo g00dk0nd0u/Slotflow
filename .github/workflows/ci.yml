@@ -33,8 +33,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find apps-script apps-script-customer -type f -name '*.gs' -print0 \
-            | xargs -0 -n1 node --check
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            cp "$file" /tmp/slotflow-check.js
+            node --check /tmp/slotflow-check.js
+          done < <(find apps-script apps-script-customer -type f -name '*.gs' -print0)
 
       - name: Validate Apps Script manifests
         shell: bash
