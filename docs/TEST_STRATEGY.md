@@ -1,88 +1,79 @@
 # Test Strategy
 
-Slotflow tests should follow product scope. The first milestone is a Google Calendar read/display companion, not a full booking transaction platform.
+Slotflow tests follow the actual MVP: Google Calendar read/display plus customer read-only availability. There is no customer booking transaction flow.
 
-## Immediate tests — Calendar read/dashboard
-
-### 1. Calendar event normalization
+## 1. Calendar event normalization
 
 Cover:
 
-- timed events
-- opaque vs transparent events where relevant
-- cancelled events
-- one-day and multi-day all-day events
-- explicit store timezone handling
-- device timezone differing from store timezone
-- malformed timestamps/provider errors
-- overlapping events
+- timed events;
+- opaque vs transparent events;
+- cancelled events;
+- one-day and multi-day all-day events;
+- explicit store timezone handling;
+- device timezone differing from store timezone;
+- malformed timestamps/provider errors;
+- overlapping events.
 
-### 2. Dashboard derivation
-
-Cover:
-
-- next appointment
-- today's ordered schedule
-- free-gap calculation inside configured business hours
-- adjacent events
-- day rollover
-- empty day
-- Calendar read failure is not shown as an empty/free schedule
-
-### 3. Dashboard API privacy/access
+## 2. Owner dashboard derivation
 
 Cover:
 
-- unauthenticated requests cannot read the store schedule
-- the source Google Calendar is not made public as a deployment shortcut
-- Google OAuth access/refresh tokens and client secrets are never exposed to the PWA or static assets
-- dashboard responses contain only the fields needed for schedule display
-- authorization/provider failures are distinguishable from a genuinely empty schedule
+- next appointment;
+- today's ordered schedule;
+- free-gap calculation inside configured business hours;
+- adjacent events;
+- day rollover;
+- empty day;
+- Calendar read failure is not shown as an empty/free schedule.
 
-### 4. Android/PWA behavior
+## 3. Customer availability derivation
 
 Cover:
 
-- cached first paint before live refresh
-- live refresh replaces cached data
-- stale/offline indication
-- resume returns directly to the schedule
-- no owner-side booking CRUD dependency
+- availability = business hours minus Calendar occupancy;
+- service duration must fit before a start time is exposed;
+- date-level ○ / △ / × status;
+- selected-date startable times/ranges;
+- all-day closures;
+- transparent/cancelled events do not block;
+- store timezone is authoritative;
+- provider/config failure never appears as free availability.
 
-### 5. CI
+## 4. Privacy/access
+
+Cover:
+
+- customer output contains no appointment titles, descriptions, attendees, names, contacts or raw Calendar objects;
+- OAuth access/refresh tokens and client secrets are never exposed client-side;
+- owner schedule endpoint remains appropriately restricted;
+- customer UI exposes only derived availability.
+
+## 5. Client behavior
+
+Cover:
+
+- stale availability responses cannot overwrite the latest selection;
+- changing service/date clears stale selected times;
+- phone CTA uses the configured `tel:` destination;
+- no customer name/contact or online-confirmation form exists;
+- no customer code path can insert/update/delete Calendar events.
+
+## 6. CI
 
 Fast tests and Markdown/link checks should run on every PR/push.
 
-The first dashboard milestone should not wait for a future customer-booking transaction test harness.
+## Explicitly unnecessary for the MVP
 
-## Deferred tests — customer booking writes
+Do not build tests for components that are intentionally absent:
 
-Add these only when #7 introduces Calendar writes:
-
-- two concurrent attempts for the same slot
-- immediate slot re-check before create
-- idempotent retry / double tap
-- same idempotency key with different request rejected
-- Calendar creation failure does not return success
-- lost response after successful Calendar creation does not create a duplicate on retry
-- server-side service duration/rules override client input
-- customer cancellation/reschedule semantics if those features are added
-
-If Google Sheets or another ledger is later introduced, then add tests for its actual role. Do not pre-build Sheets/LockService/reconciliation tests for a component that is not part of the first product.
+- concurrent customer booking writes;
+- idempotent write retry / request IDs;
+- `LockService` booking transactions;
+- Calendar insert/update/delete from customer UI;
+- Sheets booking ledger or reconciliation;
+- online cancellation/reschedule.
 
 ## Provider contract checks
 
-A small isolated Google-service test may verify assumptions that mocks cannot prove, such as:
-
-- Calendar event fields used by the read adapter
-- all-day event date semantics
-- permissions/auth failures vs genuinely empty results
-- deployed Apps Script/API response behavior if Apps Script is used
-
-Mocks prove Slotflow logic, not Google's runtime behavior.
-
-## Reference audit
-
-`REFERENCE_AUDIT.md` remains useful as a list of failure patterns to avoid if/when similar booking-write mechanisms are adopted.
-
-It is not a requirement to implement every referenced protection before the Calendar-only dashboard exists.
+A small isolated Google-service test may verify runtime assumptions mocks cannot prove, such as Calendar event fields, all-day date semantics, permissions/auth failures and deployed Apps Script behavior.
