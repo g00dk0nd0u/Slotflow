@@ -45,19 +45,29 @@ var CustomerAvailabilityCore = (function () {
 
   function slots(date, hours, service, events, timezone, stepMinutes, now) {
     var busy = busyIntervals(events, date, timezone), duration = service.durationMinutes * 60000;
-    var candidates = {};
-    hours.forEach(function (range) {
-      var cursor = localInstant(date, range.start, timezone).getTime();
-      var close = localInstant(date, range.end, timezone).getTime();
+    var windows = hours.map(function (range) {
+      return {
+        start: localInstant(date, range.start, timezone).getTime(),
+        end: localInstant(date, range.end, timezone).getTime()
+      };
+    }).sort(function (left, right) { return left.start - right.start || left.end - right.end; })
+      .reduce(function (merged, window) {
+        var previous = merged[merged.length - 1];
+        if (!previous || window.start > previous.end) merged.push(window);
+        else if (window.end > previous.end) previous.end = window.end;
+        return merged;
+      }, []);
+    var result = [];
+    windows.forEach(function (window) {
+      var cursor = window.start, close = window.end;
       for (; cursor + duration <= close; cursor += stepMinutes * 60000) {
         var end = cursor + duration;
         if (cursor >= now.getTime() && !busy.some(function (item) { return item.start < end && cursor < item.end; })) {
-          candidates[cursor] = { start: new Date(cursor).toISOString(), end: new Date(end).toISOString() };
+          result.push({ start: new Date(cursor).toISOString(), end: new Date(end).toISOString() });
         }
       }
     });
-    return Object.keys(candidates).map(Number).sort(function (left, right) { return left - right; })
-      .map(function (instant) { return candidates[instant]; });
+    return result;
   }
 
   function status(slotCount) {

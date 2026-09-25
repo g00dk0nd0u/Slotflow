@@ -70,11 +70,19 @@ assert.equal(core.slots('2030-01-02', [{ start: '09:00', end: '12:00' }], config
 assert.equal(core.slots('2030-01-02', [
   { start: '09:00', end: '11:00' }, { start: '10:00', end: '12:00' }
 ], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 5,
-'overlapping business-hour windows do not duplicate slots');
-assert.equal(core.slots('2030-01-02', [
+'overlapping business-hour windows behave as one opening period without duplicate slots');
+const adjacentSlots = core.slots('2030-01-02', [
   { start: '09:00', end: '10:00' }, { start: '10:00', end: '11:00' }
+], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01'));
+assert.deepEqual(JSON.parse(JSON.stringify(adjacentSlots.map((slot) => slot.start))), [
+  '2030-01-02T00:00:00.000Z', '2030-01-02T00:30:00.000Z', '2030-01-02T01:00:00.000Z'
+], 'adjacent business-hour windows behave as one continuous opening period');
+assert.equal(new Set(adjacentSlots.map((slot) => slot.start)).size, adjacentSlots.length,
+'merged business-hour windows do not produce duplicate slots');
+assert.equal(core.slots('2030-01-02', [
+  { start: '09:00', end: '10:00' }, { start: '10:30', end: '11:30' }
 ], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 2,
-'a service must fit within one of adjacent business-hour windows');
+'separated business-hour windows do not bridge the closed gap');
 assert.throws(() => core.busyIntervals([null], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: {}, end: {} }], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02 10:00' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
