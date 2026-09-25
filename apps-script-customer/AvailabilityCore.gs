@@ -24,8 +24,7 @@ var CustomerAvailabilityCore = (function () {
         }
         if (event.start.date <= date && date < event.end.date) intervals.push({ start: -Infinity, end: Infinity });
       } else if (event.start.dateTime && event.end.dateTime) {
-        if (!validInstant(event.start.dateTime) || !validInstant(event.end.dateTime)) throw new Error('Malformed timed Calendar event');
-        var start = Date.parse(event.start.dateTime), end = Date.parse(event.end.dateTime);
+        var start = eventInstant(event.start), end = eventInstant(event.end);
         if (end <= start) throw new Error('Malformed timed Calendar event');
         intervals.push({ start: start, end: end });
       } else throw new Error('Malformed Calendar event');
@@ -39,8 +38,41 @@ var CustomerAvailabilityCore = (function () {
     return parsed.getUTCFullYear() === parts[0] && parsed.getUTCMonth() === parts[1] - 1 && parsed.getUTCDate() === parts[2];
   }
 
-  function validInstant(value) {
-    return typeof value === 'string' && /(Z|[+-]\d\d:\d\d)$/.test(value) && isFinite(Date.parse(value));
+  function eventInstant(value) {
+    if (!value || typeof value !== 'object' || typeof value.dateTime !== 'string') {
+      throw new Error('Malformed timed Calendar event');
+    }
+    if (value.timeZone !== undefined) validateTimezone(value.timeZone);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value.dateTime)) {
+      var instant = Date.parse(value.dateTime);
+      if (isFinite(instant)) return instant;
+      throw new Error('Malformed timed Calendar event');
+    }
+    var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(value.dateTime);
+    if (!match || value.timeZone === undefined) throw new Error('Malformed timed Calendar event');
+    var milliseconds = Number(((match[7] || '') + '000').slice(0, 3));
+    var wallUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+      Number(match[4]), Number(match[5]), Number(match[6]), milliseconds);
+    var guess = new Date(wallUtc);
+    for (var i = 0; i < 3; i += 1) {
+      var offset = Utilities.formatDate(guess, value.timeZone, 'Z');
+      var sign = offset.charAt(0) === '-' ? -1 : 1;
+      var minutes = sign * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(3, 5)));
+      guess = new Date(wallUtc - minutes * 60000);
+    }
+    var expected = match[1] + '-' + match[2] + '-' + match[3] + ' ' + match[4] + ':' + match[5] + ':' + match[6];
+    if (Utilities.formatDate(guess, value.timeZone, 'yyyy-MM-dd HH:mm:ss') !== expected) {
+      throw new Error('Malformed timed Calendar event');
+    }
+    return guess.getTime();
+  }
+
+  function validateTimezone(timezone) {
+    if (typeof timezone !== 'string' || !/^[A-Za-z][A-Za-z0-9._+-]*(?:\/[A-Za-z0-9._+-]+)*$/.test(timezone)) {
+      throw new Error('Malformed timed Calendar event');
+    }
+    try { Utilities.formatDate(new Date(0), timezone, 'yyyy-MM-dd'); }
+    catch (error) { throw new Error('Malformed timed Calendar event'); }
   }
 
   function slots(date, hours, service, events, timezone, stepMinutes, now) {

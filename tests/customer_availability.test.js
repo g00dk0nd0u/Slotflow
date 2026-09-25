@@ -9,16 +9,21 @@ const config = {
 };
 
 function formatDate(value, timezone, pattern) {
-  assert.equal(timezone, 'Asia/Tokyo');
   const date = new Date(value);
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(date);
   const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
   if (pattern === 'yyyy-MM-dd') return `${p.year}-${p.month}-${p.day}`;
   if (pattern === 'u') return String(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(p.weekday) + 1);
-  if (pattern === 'Z') return '+0900';
-  const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
-  if (pattern === 'HH:mm') return time;
-  if (pattern === 'yyyy-MM-dd HH:mm') return `${p.year}-${p.month}-${p.day} ${time}`;
+  if (pattern === 'Z') {
+    const label = new Intl.DateTimeFormat('en', { timeZone: timezone, timeZoneName: 'longOffset' })
+      .formatToParts(date).find((part) => part.type === 'timeZoneName').value;
+    if (label === 'GMT') return '+0000';
+    return label.replace('GMT', '').replace(':', '');
+  }
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date);
+  if (pattern === 'HH:mm') return time.slice(0, 5);
+  if (pattern === 'yyyy-MM-dd HH:mm') return `${p.year}-${p.month}-${p.day} ${time.slice(0, 5)}`;
+  if (pattern === 'yyyy-MM-dd HH:mm:ss') return `${p.year}-${p.month}-${p.day} ${time}`;
   throw new Error(`unexpected pattern ${pattern}`);
 }
 
@@ -83,9 +88,19 @@ assert.equal(core.slots('2030-01-02', [
   { start: '09:00', end: '10:00' }, { start: '10:30', end: '11:30' }
 ], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 2,
 'separated business-hour windows do not bridge the closed gap');
+assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{
+  start: { dateTime: '2030-01-02T10:00:00', timeZone: 'Asia/Tokyo' },
+  end: { dateTime: '2030-01-02T02:00:00Z' }
+}], '2030-01-02', 'Asia/Tokyo'))), [{ start: Date.parse('2030-01-02T01:00:00Z'), end: Date.parse('2030-01-02T02:00:00Z') }],
+'offsetless EventDateTime uses its explicit IANA timezone independently for start and end');
+assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{
+  start: { dateTime: '2030-01-02T01:00:00Z' }, end: { dateTime: '2030-01-02T11:00:00+09:00' }
+}], '2030-01-02', 'Asia/Tokyo'))), [{ start: Date.parse('2030-01-02T01:00:00Z'), end: Date.parse('2030-01-02T02:00:00Z') }],
+'Z and numeric-offset EventDateTime values remain supported');
 assert.throws(() => core.busyIntervals([null], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: {}, end: {} }], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02 10:00' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02T10:00:00', timeZone: 'Invalid/Timezone' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: { date: '2030-02-30' }, end: { date: '2030-03-02' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed all-day Calendar event/);
 assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{ status: 'cancelled' }], '2030-01-02', 'Asia/Tokyo'))), [],
 'deleted cancelled events may omit interval data');
