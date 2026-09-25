@@ -16,31 +16,48 @@ var CustomerAvailabilityCore = (function () {
   function busyIntervals(events, date, timezone) {
     var intervals = [];
     events.forEach(function (event) {
-      if (!event || event.status === 'cancelled' || event.transparency === 'transparent' || !event.start || !event.end) return;
+      if (event && (event.status === 'cancelled' || event.transparency === 'transparent')) return;
+      if (!event || typeof event !== 'object' || !event.start || !event.end) throw new Error('Malformed Calendar event');
       if (event.start.date && event.end.date) {
+        if (!validDate(event.start.date) || !validDate(event.end.date) || event.end.date <= event.start.date) {
+          throw new Error('Malformed all-day Calendar event');
+        }
         if (event.start.date <= date && date < event.end.date) intervals.push({ start: -Infinity, end: Infinity });
       } else if (event.start.dateTime && event.end.dateTime) {
+        if (!validInstant(event.start.dateTime) || !validInstant(event.end.dateTime)) throw new Error('Malformed timed Calendar event');
         var start = Date.parse(event.start.dateTime), end = Date.parse(event.end.dateTime);
-        if (isFinite(start) && isFinite(end) && end > start) intervals.push({ start: start, end: end });
+        if (end <= start) throw new Error('Malformed timed Calendar event');
+        intervals.push({ start: start, end: end });
       } else throw new Error('Malformed Calendar event');
     });
     return intervals;
   }
 
+  function validDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    var parts = value.split('-').map(Number), parsed = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    return parsed.getUTCFullYear() === parts[0] && parsed.getUTCMonth() === parts[1] - 1 && parsed.getUTCDate() === parts[2];
+  }
+
+  function validInstant(value) {
+    return typeof value === 'string' && /(Z|[+-]\d\d:\d\d)$/.test(value) && isFinite(Date.parse(value));
+  }
+
   function slots(date, hours, service, events, timezone, stepMinutes, now) {
     var busy = busyIntervals(events, date, timezone), duration = service.durationMinutes * 60000;
-    var result = [];
+    var candidates = {};
     hours.forEach(function (range) {
       var cursor = localInstant(date, range.start, timezone).getTime();
       var close = localInstant(date, range.end, timezone).getTime();
       for (; cursor + duration <= close; cursor += stepMinutes * 60000) {
         var end = cursor + duration;
         if (cursor >= now.getTime() && !busy.some(function (item) { return item.start < end && cursor < item.end; })) {
-          result.push({ start: new Date(cursor).toISOString(), end: new Date(end).toISOString() });
+          candidates[cursor] = { start: new Date(cursor).toISOString(), end: new Date(end).toISOString() };
         }
       }
     });
-    return result;
+    return Object.keys(candidates).map(Number).sort(function (left, right) { return left - right; })
+      .map(function (instant) { return candidates[instant]; });
   }
 
   function status(slotCount) {

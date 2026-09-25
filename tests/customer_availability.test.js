@@ -32,7 +32,7 @@ function harness(options = {}) {
     Calendar: { Events: { list(id) {
       assert.equal(id, 'private-calendar');
       if (options.listFailure) throw new Error('private provider failure');
-      return { items: options.events || [] };
+      return options.providerResponse === undefined ? { items: options.events || [] } : options.providerResponse;
     } } },
     CustomerAvailabilityConfig: { load() { if (options.configFailure) throw new Error('private config'); return config; } },
     Utilities: { formatDate }
@@ -67,6 +67,28 @@ assert.equal(core.status(0), '×'); assert.equal(core.status(1), '△'); assert.
 assert.equal(core.slots('2030-01-02', [{ start: '09:00', end: '10:00' }], { durationMinutes: 90 }, [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 0, 'service must fit fully');
 assert.equal(core.slots('2030-01-02', [{ start: '09:00', end: '12:00' }], config.services[0], [{ start: { date: '2030-01-02' }, end: { date: '2030-01-03' } }], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 0, 'opaque all-day events block the date');
 assert.equal(core.slots('2030-01-02', [{ start: '09:00', end: '12:00' }], config.services[0], [{ transparency: 'transparent', start: { date: '2030-01-02' }, end: { date: '2030-01-03' } }], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 5, 'transparent all-day events do not block');
+assert.equal(core.slots('2030-01-02', [
+  { start: '09:00', end: '11:00' }, { start: '10:00', end: '12:00' }
+], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 5,
+'overlapping business-hour windows do not duplicate slots');
+assert.equal(core.slots('2030-01-02', [
+  { start: '09:00', end: '10:00' }, { start: '10:00', end: '11:00' }
+], config.services[0], [], 'Asia/Tokyo', 30, new Date('2029-01-01')).length, 2,
+'a service must fit within one of adjacent business-hour windows');
+assert.throws(() => core.busyIntervals([null], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: {}, end: {} }], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02 10:00' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: { date: '2030-02-30' }, end: { date: '2030-03-02' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed all-day Calendar event/);
+assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{ status: 'cancelled' }], '2030-01-02', 'Asia/Tokyo'))), [],
+'deleted cancelled events may omit interval data');
 assert.equal(harness({ listFailure: true }).getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'standard' }).error.code, 'UNAVAILABLE', 'provider failure is not free availability');
+for (const providerResponse of ['unexpected', [], { items: null }, { items: 'unexpected' }, { items: [], nextPageToken: 42 }]) {
+  const failure = harness({ providerResponse }).getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'standard' });
+  assert.equal(failure.error.code, 'UNAVAILABLE', 'malformed provider data fails closed');
+  assert.equal(Object.hasOwn(failure, 'days'), false, 'malformed provider data never resembles free availability');
+}
+const malformedEvent = harness({ events: [null] }).getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'standard' });
+assert.equal(malformedEvent.error.code, 'UNAVAILABLE', 'malformed provider event fails closed');
+assert.equal(Object.hasOwn(malformedEvent, 'days'), false);
 assert.equal(harness({ configFailure: true }).getAvailabilityOptions().error.code, 'UNAVAILABLE');
 console.log('customer availability tests passed');

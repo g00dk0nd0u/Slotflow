@@ -67,8 +67,11 @@ function listEvents_(calendarId, timeMin, timeMax, extra) {
   do {
     params.pageToken = token;
     var response = Calendar.Events.list(calendarId, params);
-    if (!response || !Array.isArray(response.items || [])) throw new Error('Calendar read failed');
-    items = items.concat(response.items || []); token = response.nextPageToken;
+    if (!response || typeof response !== 'object' || Array.isArray(response)) throw new Error('Calendar read failed');
+    var pageItems = response.items === undefined ? [] : response.items;
+    if (!Array.isArray(pageItems) || (response.nextPageToken !== undefined &&
+        typeof response.nextPageToken !== 'string')) throw new Error('Calendar read failed');
+    items = items.concat(pageItems); token = response.nextPageToken;
   } while (token);
   return items;
 }
