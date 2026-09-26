@@ -43,13 +43,20 @@ var CustomerAvailabilityCore = (function () {
       throw new Error('Malformed timed Calendar event');
     }
     if (value.timeZone !== undefined) validateTimezone(value.timeZone);
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value.dateTime)) {
+    var offsetMatch = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-](\d{2}):(\d{2}))$/.exec(value.dateTime);
+    if (offsetMatch) {
+      if (!validDateTimeParts(offsetMatch) || (offsetMatch[8] !== 'Z' &&
+          (Number(offsetMatch[9]) > 23 || Number(offsetMatch[10]) > 59))) {
+        throw new Error('Malformed timed Calendar event');
+      }
       var instant = Date.parse(value.dateTime);
       if (isFinite(instant)) return instant;
       throw new Error('Malformed timed Calendar event');
     }
     var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/.exec(value.dateTime);
-    if (!match || value.timeZone === undefined) throw new Error('Malformed timed Calendar event');
+    if (!match || value.timeZone === undefined || !validDateTimeParts(match)) {
+      throw new Error('Malformed timed Calendar event');
+    }
     var milliseconds = Number(((match[7] || '') + '000').slice(0, 3));
     var wallUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]),
       Number(match[4]), Number(match[5]), Number(match[6]), milliseconds);
@@ -65,6 +72,11 @@ var CustomerAvailabilityCore = (function () {
       throw new Error('Malformed timed Calendar event');
     }
     return guess.getTime();
+  }
+
+  function validDateTimeParts(match) {
+    return validDate(match[1] + '-' + match[2] + '-' + match[3]) &&
+      Number(match[4]) <= 23 && Number(match[5]) <= 59 && Number(match[6]) <= 59;
   }
 
   function validateTimezone(timezone) {

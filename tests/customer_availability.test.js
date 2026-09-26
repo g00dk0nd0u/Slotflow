@@ -97,10 +97,19 @@ assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{
   start: { dateTime: '2030-01-02T01:00:00Z' }, end: { dateTime: '2030-01-02T11:00:00+09:00' }
 }], '2030-01-02', 'Asia/Tokyo'))), [{ start: Date.parse('2030-01-02T01:00:00Z'), end: Date.parse('2030-01-02T02:00:00Z') }],
 'Z and numeric-offset EventDateTime values remain supported');
+assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{
+  start: { dateTime: '2032-02-29T10:00:00Z' }, end: { dateTime: '2032-02-29T11:00:00Z' }
+}], '2032-02-29', 'Asia/Tokyo'))), [{ start: Date.parse('2032-02-29T10:00:00Z'), end: Date.parse('2032-02-29T11:00:00Z') }],
+'valid leap-day timestamps remain supported');
 assert.throws(() => core.busyIntervals([null], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: {}, end: {} }], '2030-01-02', 'Asia/Tokyo'), /Malformed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02 10:00' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
 assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-01-02T10:00:00', timeZone: 'Invalid/Timezone' }, end: { dateTime: '2030-01-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-02-30T10:00:00Z' }, end: { dateTime: '2030-03-02T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+assert.throws(() => core.busyIntervals([{ start: { dateTime: '2030-02-30T10:00:00+09:00' }, end: { dateTime: '2030-03-02T11:00:00+09:00' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+['2030-01-02T24:00:00Z', '2030-01-02T10:60:00Z', '2030-01-02T10:00:60Z'].forEach((dateTime) => {
+  assert.throws(() => core.busyIntervals([{ start: { dateTime }, end: { dateTime: '2030-01-03T11:00:00Z' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed timed Calendar event/);
+});
 assert.throws(() => core.busyIntervals([{ start: { date: '2030-02-30' }, end: { date: '2030-03-02' } }], '2030-01-02', 'Asia/Tokyo'), /Malformed all-day Calendar event/);
 assert.deepEqual(JSON.parse(JSON.stringify(core.busyIntervals([{ status: 'cancelled' }], '2030-01-02', 'Asia/Tokyo'))), [],
 'deleted cancelled events may omit interval data');
