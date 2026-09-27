@@ -123,13 +123,18 @@ var CustomerAvailabilityCore = (function () {
     var result = [], start = slots[0].start, previous = slots[0].start;
     for (var i = 1; i < slots.length; i += 1) {
       if (Date.parse(slots[i].start) - Date.parse(previous) !== stepMinutes * 60000) {
-        result.push(clock(start, timezone) + ' ～ ' + clock(previous, timezone));
+        result.push(formatRange(start, previous, timezone));
         start = slots[i].start;
       }
       previous = slots[i].start;
     }
-    result.push(clock(start, timezone) + ' ～ ' + clock(previous, timezone));
+    result.push(formatRange(start, previous, timezone));
     return result;
+  }
+
+  function formatRange(start, end, timezone) {
+    var first = clock(start, timezone), last = clock(end, timezone);
+    return first === last ? first : first + ' ～ ' + last;
   }
 
   function clock(instant, timezone) {
