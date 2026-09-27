@@ -33,6 +33,8 @@ Cover:
 
 - availability = business hours minus Calendar occupancy;
 - service duration must fit before a start time is exposed;
+- legacy service durations and service-option durations are resolved from validated server configuration;
+- missing/unknown/mismatched options and client-supplied durations fail closed;
 - date-level ○ / △ / × status;
 - selected-date startable times/ranges;
 - all-day closures;
@@ -54,7 +56,8 @@ Cover:
 Cover:
 
 - stale availability responses cannot overwrite the latest selection;
-- changing service/date clears stale selected times;
+- changing service/option/date clears stale selected times;
+- the option selector is populated from the selected service and stale service/option responses cannot overwrite it;
 - phone CTA uses the configured `tel:` destination;
 - no customer name/contact or online-confirmation form exists;
 - no customer code path can insert/update/delete Calendar events.

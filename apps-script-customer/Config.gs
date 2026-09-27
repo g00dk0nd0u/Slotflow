@@ -38,10 +38,31 @@ var CustomerAvailabilityConfig = (function () {
     services.forEach(function (service) {
       if (!service || !/^[A-Za-z0-9_-]{1,40}$/.test(service.id || '') ||
           typeof service.name !== 'string' || !service.name.trim() || service.name.length > 80 ||
-          !Number.isInteger(service.durationMinutes) || service.durationMinutes < 1 ||
-          service.durationMinutes > 1440 || ids[service.id]) throw new Error('Invalid services');
+          ids[service.id]) throw new Error('Invalid services');
+      var hasDuration = service.durationMinutes !== undefined;
+      var hasOptions = service.options !== undefined;
+      if (hasDuration === hasOptions) throw new Error('Invalid services');
+      if (hasDuration) validateDuration(service.durationMinutes);
+      else validateOptions(service.options);
       ids[service.id] = true;
     });
+  }
+
+  function validateOptions(options) {
+    if (!Array.isArray(options) || !options.length) throw new Error('Invalid services');
+    var ids = {};
+    options.forEach(function (option) {
+      if (!option || !/^[A-Za-z0-9_-]{1,40}$/.test(option.id || '') || ids[option.id] ||
+          typeof option.name !== 'string' || !option.name.trim() || option.name.length > 80) {
+        throw new Error('Invalid services');
+      }
+      validateDuration(option.durationMinutes);
+      ids[option.id] = true;
+    });
+  }
+
+  function validateDuration(duration) {
+    if (!Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('Invalid services');
   }
 
   function required(properties, key) {
