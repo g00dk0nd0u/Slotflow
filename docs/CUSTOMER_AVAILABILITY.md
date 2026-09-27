@@ -52,7 +52,9 @@ The target mobile UI is intentionally small:
 
 - brand/store header;
 - service selection;
-- compact calendar;
+- Sunday-first calendar showing six full weeks (42 days) from the current store-local week;
+- past dates remain visible but disabled and are never requested from the server;
+- dynamic month headings when the six-week window crosses month boundaries;
 - ○ / △ / × availability;
 - selected-date startable times/ranges;
 - `tel:` CTA labeled **電話で確認する**.

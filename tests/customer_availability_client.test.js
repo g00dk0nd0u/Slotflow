@@ -12,7 +12,7 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = String(value); }
 }
 
-const ids = ['service', 'style', 'months', 'ranges', 'selectedDate', 'error', 'expand', 'phone', 'store'];
+const ids = ['service', 'style', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store'];
 const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
 const calls = [];
 let successHandler;
@@ -43,8 +43,8 @@ calls[0].successHandler({
 });
 assert.equal(elements.store.textContent, 'Slotflow Salon', 'store name remains data-driven');
 assert.equal(source.includes('textContent=response.timezone'), false, 'raw IANA timezone is not displayed');
-assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-01-13', serviceId: 'standard' },
-  'initial view covers the Monday-to-Sunday 14-day window, without requesting a past date');
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'standard' },
+  'six-week view starts on Sunday while excluding past dates from the request');
 
 function allDateButtons() {
   return elements.months.children.flatMap((month) => month.children[2].children)
@@ -59,10 +59,15 @@ respondWith([
   { date: '2030-01-02', status: '△', ranges: ['10:30 ～ 11:00'] },
   { date: '2030-01-03', status: '○', ranges: ['13:00 ～ 15:30', '17:00 ～ 17:30'] }
 ]);
-assert.deepEqual(elements.months.children.map((group) => group.children[0].textContent), ['2029年12月', '2030年1月'],
-  '14 consecutive days are grouped under data-driven month headings');
-assert.deepEqual(elements.months.children[0].children[1].children.map((item) => item.textContent), ['月', '火', '水', '木', '金', '土', '日'],
-  'weekday headers are Monday-first');
+assert.deepEqual(elements.months.children.map((group) => group.children[0].textContent), ['2029年12月', '2030年1月', '2030年2月'],
+  '42 consecutive days are grouped under data-driven month headings across year and month boundaries');
+assert.deepEqual(elements.months.children[0].children[1].children.map((item) => item.textContent), ['日', '月', '火', '水', '木', '金', '土'],
+  'weekday headers are Sunday-first');
+assert.equal(allDateButtons().length, 42, 'six full weeks are rendered immediately');
+const pastDate = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2029-12-31'));
+assert.ok(pastDate && pastDate.disabled, 'past dates remain visible and disabled');
+assert.equal(html.includes('id="expand"'), false, 'the expansion control is absent');
+assert.equal(html.includes('.expand'), false, 'expansion styling is absent');
 const dateButton = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-02'));
 assert.ok(dateButton, 'available date button exists');
 dateButton.onclick();
@@ -71,18 +76,12 @@ assert.match(allDateButtons().find((item) => item.attributes['aria-label'].start
   'selected date receives the highlight class');
 assert.equal(elements.ranges.children[0].textContent, '10:30 ～ 11:00');
 
-elements.expand.onclick();
-assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'expansion clears details while refreshing');
-assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-01-27', serviceId: 'standard' },
-  'chevron expands the request to the next 14 days');
-respondWith([{ date: '2030-01-20', status: '×', ranges: [] }]);
-assert.equal(elements.expand.hidden, true, 'expansion control hides after the second 14 days are shown');
-
 elements.service.value = 'short';
 elements.service.onchange();
 assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'service change clears the old date immediately');
 assert.match(elements.ranges.innerHTML, /カレンダーから日付を選択してください/, 'service change clears old ranges immediately');
-assert.equal(calls.at(-1).arg.endDate, '2030-01-13', 'service change returns to the initial 14-day view');
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'short' },
+  'service change reloads the same six-week window');
 const staleServiceCall = calls.at(-1);
 
 elements.service.value = 'standard';
@@ -98,7 +97,33 @@ assert.equal(elements.phone.attributes['aria-disabled'], 'false');
 assert.equal(elements.phone.href, 'tel:+81312345678', 'phone CTA preserves the server-provided tel link');
 assert.match(html, /電話で確認する/);
 assert.match(html, /※ 表示の時間内でも、施術内容によりご案内できない場合があります。/);
+
 assert.equal(html.includes('空き状況カレンダー'), false);
+function initialRequestFor(storeLocalDate) {
+  const localElements = Object.fromEntries(ids.map((id) => [id, new Element()]));
+  const localCalls = [];
+  let success;
+  const localRunner = {
+    withSuccessHandler(handler) { success = handler; return this; },
+    withFailureHandler() { return this; },
+    getAvailabilityOptions(arg) { localCalls.push({ method: 'getAvailabilityOptions', arg, success }); },
+    getAvailability(arg) { localCalls.push({ method: 'getAvailability', arg }); }
+  };
+  const localContext = { Date, document: {
+    getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
+  }, google: { script: { run: localRunner } } };
+  vm.createContext(localContext);
+  vm.runInContext(source, localContext);
+  localCalls[0].success({ ok: true, storeName: '店', phoneHref: 'tel:1', timezone: 'Asia/Tokyo',
+    storeLocalDate, availabilityHorizonEndDate: '2031-12-31', services: [{ id: 'standard', name: 'カット' }] });
+  return JSON.parse(JSON.stringify(localCalls.at(-1).arg));
+}
+assert.deepEqual(initialRequestFor('2030-06-09'), { startDate: '2030-06-09', endDate: '2030-07-20', serviceId: 'standard' },
+  'a Sunday anchors to itself across a month boundary');
+assert.deepEqual(initialRequestFor('2030-06-10'), { startDate: '2030-06-10', endDate: '2030-07-20', serviceId: 'standard' },
+  'a Monday anchors to the preceding Sunday without requesting it');
+assert.deepEqual(initialRequestFor('2031-01-01'), { startDate: '2031-01-01', endDate: '2031-02-08', serviceId: 'standard' },
+  'the Sunday calculation crosses a year boundary');
 ['create' + 'Booking', 'request' + 'Id', 'finger' + 'print', 'お名' + '前', '連絡' + '先', '予約を' + '確定',
   'Calendar.Events.' + 'insert', 'Lock' + 'Service'].forEach((term) => {
   assert.equal(source.includes(term), false, `write-only term remains: ${term}`);

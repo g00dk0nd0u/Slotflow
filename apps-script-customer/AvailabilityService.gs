@@ -84,7 +84,7 @@ function validateAvailabilityRequest_(request, config, now) {
   var today = Utilities.formatDate(now, config.timezone, 'yyyy-MM-dd');
   var limit = Utilities.formatDate(new Date(now.getTime() + config.horizonDays * 24 * 60 * 60000), config.timezone, 'yyyy-MM-dd');
   if (request.startDate < today || request.endDate > limit ||
-      Date.parse(request.endDate + 'T00:00:00Z') - Date.parse(request.startDate + 'T00:00:00Z') > 31 * 86400000) invalid_();
+      Date.parse(request.endDate + 'T00:00:00Z') - Date.parse(request.startDate + 'T00:00:00Z') > 41 * 86400000) invalid_();
   return { startDate: request.startDate, endDate: request.endDate, service: service };
 }
 

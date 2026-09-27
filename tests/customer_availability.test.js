@@ -123,4 +123,14 @@ const malformedEvent = harness({ events: [null] }).getAvailability({ startDate: 
 assert.equal(malformedEvent.error.code, 'UNAVAILABLE', 'malformed provider event fails closed');
 assert.equal(Object.hasOwn(malformedEvent, 'days'), false);
 assert.equal(harness({ configFailure: true }).getAvailabilityOptions().error.code, 'UNAVAILABLE');
+assert.equal(harness().getAvailability({ startDate: '2030-01-01', endDate: '2030-02-11', serviceId: 'standard' }).ok, true,
+  'a 42-day inclusive customer request is accepted');
+assert.equal(harness().getAvailability({ startDate: '2030-01-01', endDate: '2030-02-12', serviceId: 'standard' }).error.code, 'INVALID_REQUEST',
+  'a request larger than 42 inclusive days is rejected');
+assert.equal(core.ranges([{ start: '2030-01-02T00:00:00.000Z' }], 'Asia/Tokyo', 30)[0], '09:00',
+  'one isolated start time is formatted without a duplicate endpoint');
+assert.equal(core.ranges([
+  { start: '2030-01-02T00:00:00.000Z' }, { start: '2030-01-02T00:30:00.000Z' }
+], 'Asia/Tokyo', 30)[0], '09:00 ～ 09:30', 'consecutive starts remain a compact range');
+
 console.log('customer availability tests passed');
