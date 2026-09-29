@@ -12,7 +12,7 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = String(value); }
 }
 
-const ids = ['service', 'option', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store'];
+const ids = ['service', 'option', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store', 'expand', 'expandLabel'];
 const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
 const calls = [];
 let successHandler;
@@ -47,7 +47,8 @@ assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '203
   'six-week view starts on Sunday while excluding past dates from the request');
 
 function allDateButtons() {
-  return elements.months.children.flatMap((month) => month.children[2].children)
+  return elements.months.children.flatMap((period) => period.children)
+    .flatMap((month) => month.children[2].children)
     .filter((item) => item.attributes['aria-label']);
 }
 
@@ -57,17 +58,40 @@ function respondWith(days) {
 
 respondWith([
   { date: '2030-01-02', status: '△', ranges: ['10:30 ～ 11:00'] },
-  { date: '2030-01-03', status: '○', ranges: ['13:00 ～ 15:30', '17:00 ～ 17:30'] }
+  { date: '2030-01-03', status: '○', ranges: ['13:00 ～ 15:30', '17:00 ～ 17:30'] },
+  { date: '2030-01-22', status: '○', ranges: ['11:00 ～ 12:00'] }
 ]);
-assert.deepEqual(elements.months.children.map((group) => group.children[0].textContent), ['2029年12月', '2030年1月', '2030年2月'],
-  '42 consecutive days are grouped under data-driven month headings across year and month boundaries');
-assert.deepEqual(elements.months.children[0].children[1].children.map((item) => item.textContent), ['日', '月', '火', '水', '木', '金', '土'],
+assert.equal(elements.months.children[0].hidden, false, 'the first three weeks are visible initially');
+assert.equal(elements.months.children[1].hidden, true, 'the later three weeks are hidden initially');
+assert.equal(elements.months.children[0].children.flatMap((month) => month.children[2].children)
+  .filter((item) => item.attributes['aria-label']).length, 21, 'the initial calendar contains exactly three weeks');
+assert.deepEqual(elements.months.children.flatMap((period) => period.children).map((group) => group.children[0].textContent),
+  ['2029年12月', '2030年1月', '2030年1月', '2030年2月'],
+  '42 consecutive days are grouped under data-driven month headings across the two three-week periods');
+assert.deepEqual(elements.months.children[0].children[0].children[1].children.map((item) => item.textContent), ['日', '月', '火', '水', '木', '金', '土'],
   'weekday headers are Sunday-first');
-assert.equal(allDateButtons().length, 42, 'six full weeks are rendered immediately');
+assert.equal(allDateButtons().length, 42, 'all six weeks remain rendered and available client-side');
 const pastDate = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2029-12-31'));
 assert.ok(pastDate && pastDate.disabled, 'past dates remain visible and disabled');
-assert.equal(html.includes('id="expand"'), false, 'the expansion control is absent');
-assert.equal(html.includes('.expand'), false, 'expansion styling is absent');
+assert.equal(elements.expandLabel.textContent, 'もっと見る');
+assert.equal(elements.expand.attributes['aria-expanded'], 'false');
+elements.expand.onclick();
+assert.equal(elements.months.children[1].hidden, false, 'the later three weeks appear after expansion');
+assert.equal(elements.expandLabel.textContent, '閉じる');
+assert.equal(elements.expand.attributes['aria-expanded'], 'true');
+const laterDateButton = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-22'));
+assert.ok(laterDateButton, 'a date in the expanded period is available');
+laterDateButton.onclick();
+assert.equal(elements.selectedDate.textContent, '1月22日（火）');
+assert.equal(elements.ranges.children[0].textContent, '11:00 ～ 12:00');
+elements.expand.onclick();
+assert.equal(elements.months.children[1].hidden, true, 'the later three weeks can be collapsed again');
+assert.equal(elements.expandLabel.textContent, 'もっと見る');
+assert.equal(elements.selectedDate.textContent, '1月22日（火）', 'collapsing preserves the selected date and its startable times');
+elements.expand.onclick();
+assert.match(allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-22')).className, /selected/,
+  'the selected date remains highlighted after re-expansion');
+elements.expand.onclick();
 const dateButton = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-02'));
 assert.ok(dateButton, 'available date button exists');
 dateButton.onclick();
