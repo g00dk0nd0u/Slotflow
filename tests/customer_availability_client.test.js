@@ -14,6 +14,7 @@ class Element {
 
 const ids = ['service', 'option', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store', 'expand', 'expandLabel'];
 const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
+elements.expand.hidden = true;
 const calls = [];
 let successHandler;
 let failureHandler;
@@ -35,6 +36,8 @@ vm.createContext(context);
 const html = fs.readFileSync('apps-script-customer/Availability.html', 'utf8');
 const source = html.split('<script>')[1].split('</script>')[0];
 vm.runInContext(source, context);
+assert.equal(elements.expand.hidden, true, 'expand control is hidden before availability options finish loading');
+assert.match(html, /\.expand\[hidden\]\{display:none\}/, 'hidden expand control overrides its flex display rule');
 
 calls[0].successHandler({
   ok: true, storeName: 'Slotflow Salon', phoneHref: 'tel:+81312345678', timezone: 'Asia/Tokyo',
@@ -45,6 +48,7 @@ assert.equal(elements.store.textContent, 'Slotflow Salon', 'store name remains d
 assert.equal(source.includes('textContent=response.timezone'), false, 'raw IANA timezone is not displayed');
 assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'standard' },
   'six-week view starts on Sunday while excluding past dates from the request');
+assert.equal(elements.expand.hidden, true, 'expand control stays hidden while initial availability is loading');
 
 function allDateButtons() {
   return elements.months.children.flatMap((period) => period.children)
@@ -74,6 +78,7 @@ assert.equal(allDateButtons().length, 42, 'all six weeks remain rendered and ava
 const pastDate = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2029-12-31'));
 assert.ok(pastDate && pastDate.disabled, 'past dates remain visible and disabled');
 assert.equal(elements.expandLabel.textContent, 'もっと見る');
+assert.equal(elements.expand.hidden, false, 'successful availability load shows the expand control');
 assert.equal(elements.expand.attributes['aria-expanded'], 'false');
 elements.expand.onclick();
 assert.equal(elements.months.children[1].hidden, false, 'the later three weeks appear after expansion');
@@ -102,6 +107,7 @@ assert.equal(elements.ranges.children[0].textContent, '10:30 ～ 11:00');
 
 elements.service.value = 'color';
 elements.service.onchange();
+assert.equal(elements.expand.hidden, true, 'expand control stays hidden while service availability reloads');
 assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'service change clears the old date immediately');
 assert.match(elements.ranges.innerHTML, /カレンダーから日付を選択してください/, 'service change clears old ranges immediately');
 assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'short' },
@@ -112,6 +118,7 @@ const staleOptionCall = calls.at(-1);
 
 elements.option.value = 'long';
 elements.option.onchange();
+assert.equal(elements.expand.hidden, true, 'expand control stays hidden while option availability reloads');
 const latestOptionCall = calls.at(-1);
 assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'long' },
   'option change clears and reloads availability with no client duration');
@@ -126,13 +133,16 @@ latestOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long'
 ] });
 assert.ok(allDateButtons().find((item) => item.attributes['aria-label'] === '2030-01-04 ○'),
   'the latest option response is rendered');
+assert.equal(elements.expand.hidden, false, 'successful reload shows the expand control again');
 
 elements.service.value = 'standard';
 elements.service.onchange();
+assert.equal(elements.expand.hidden, true, 'expand control is hidden for the next service reload');
 staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [{ date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }] });
 assert.equal(elements.months.textContent, '読み込み中…', 'stale service response remains ignored');
 const failedCall = calls.at(-1);
 failedCall.failureHandler(new Error('provider unavailable'));
+assert.equal(elements.expand.hidden, true, 'expand control stays hidden after provider failure handling');
 assert.equal(elements.selectedDate.textContent, '日付を選択してください');
 assert.match(elements.ranges.innerHTML, /表示できません/, 'provider failure never leaves old ranges visible');
 
