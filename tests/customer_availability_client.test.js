@@ -178,7 +178,7 @@ elements.expand.onclick();
 const calendarBeforeRefresh = elements.months.children;
 now += 60000;
 intervals[0].handler();
-assert.equal(calls.at(-1).method, 'getAvailability', 'the timer refreshes availability');
+assert.equal(calls.at(-1).method, 'getAvailabilityOptions', 'the timer refreshes store-local date metadata first');
 assert.equal(elements.months.children, calendarBeforeRefresh,
   'background loading keeps the current calendar rendered');
 assert.equal(elements.expand.attributes['aria-expanded'], 'true', 'background loading preserves expanded state');
@@ -190,8 +190,17 @@ assert.match(elements.ranges.innerHTML, /読み込み中…/,
 const timedCall = calls.at(-1);
 listeners.visibilitychange();
 assert.equal(calls.at(-1), timedCall, 'a visibility event does not duplicate an in-flight timer refresh');
+timedCall.successHandler({
+  ok: true, storeLocalDate: '2030-01-02', availabilityHorizonEndDate: '2030-03-03'
+});
+const timedAvailabilityCall = calls.at(-1);
+assert.deepEqual(JSON.parse(JSON.stringify(timedAvailabilityCall.arg)), {
+  startDate: '2030-01-02', endDate: '2030-02-09', serviceId: 'color', optionId: 'short'
+}, 'a refresh after midnight uses the new store-local today instead of the stale previous-day startDate');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）',
+  'a selected date remains selected when it is still in the refreshed window');
 scrollPosition = 987;
-timedCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+timedAvailabilityCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
   { date: '2030-01-02', status: '○', ranges: ['16:00 ～ 17:00'] }
 ] });
 assert.equal(scrollPosition, 987, 'background rendering preserves scrolling that occurred while the request was in flight');
@@ -202,21 +211,31 @@ assert.equal(elements.expand.attributes['aria-expanded'], 'true', 'expanded stat
 context.document.hidden = true;
 now += 60000;
 intervals[0].handler();
-assert.equal(calls.at(-1), timedCall, 'the timer does not refresh a hidden page');
+assert.equal(calls.at(-1), timedAvailabilityCall, 'the timer does not refresh a hidden page');
 context.document.hidden = false;
 listeners.visibilitychange();
 const visibleCall = calls.at(-1);
-assert.notEqual(visibleCall, timedCall, 'becoming visible refreshes immediately');
-visibleCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
-  { date: '2030-01-02', status: '○', ranges: ['16:00 ～ 17:00'] }
+assert.notEqual(visibleCall, timedAvailabilityCall, 'becoming visible refreshes immediately');
+visibleCall.successHandler({
+  ok: true, storeLocalDate: '2030-01-06', availabilityHorizonEndDate: '2030-03-07'
+});
+const sundayRolloverCall = calls.at(-1);
+assert.deepEqual(JSON.parse(JSON.stringify(sundayRolloverCall.arg)), {
+  startDate: '2030-01-06', endDate: '2030-02-16', serviceId: 'color', optionId: 'short'
+}, 'a Sunday rollover advances the Sunday-first request window');
+assert.equal(elements.selectedDate.textContent, '日付を選択してください',
+  'a selected date before the new store-local today is cleared naturally');
+sundayRolloverCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+  { date: '2030-01-07', status: '○', ranges: ['16:00 ～ 17:00'] }
 ] });
+allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-07')).onclick();
 
 elements.service.value = 'standard';
 elements.service.onchange();
 assert.equal(elements.expand.hidden, true, 'expand control is hidden for the next service reload');
 staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long', days: [{ date: '2030-01-02', status: '△', ranges: ['15:00 ～ 15:30'] }] });
 assert.equal(elements.months.textContent, '読み込み中…', 'stale service response remains ignored');
-assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'the date remains selected until a terminal failure');
+assert.equal(elements.selectedDate.textContent, '1月7日（月）', 'the date remains selected until a terminal failure');
 const failedCall = calls.at(-1);
 failedCall.failureHandler(new Error('provider unavailable'));
 assert.equal(elements.expand.hidden, true, 'expand control stays hidden after provider failure handling');
