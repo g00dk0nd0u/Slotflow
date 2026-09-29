@@ -87,8 +87,14 @@ assert.ok(pastDate && pastDate.disabled, 'past dates remain visible and disabled
 assert.equal(elements.expandLabel.textContent, 'もっと見る');
 assert.equal(elements.expand.hidden, false, 'successful availability load shows the expand control');
 assert.equal(elements.expand.attributes['aria-expanded'], 'false');
+assert.equal(elements.months.children[0].className, 'calendar-weeks',
+  'the collapsed calendar retains its normal bottom spacing');
 elements.expand.onclick();
 assert.equal(elements.months.children[1].hidden, false, 'the later three weeks appear after expansion');
+assert.match(elements.months.children[0].className, /calendar-weeks-continuing/,
+  'same-month expansion removes the inter-block spacing');
+assert.match(html, /\.calendar-weeks-continuing \.month:last-child\{margin-bottom:0\}/,
+  'the continuation spacing rule removes only the preceding month margin');
 assert.equal(elements.expandLabel.textContent, '閉じる');
 assert.equal(elements.expand.attributes['aria-expanded'], 'true');
 const laterDateButton = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-22'));
@@ -181,7 +187,7 @@ function initialRequestFor(storeLocalDate) {
   return JSON.parse(JSON.stringify(localCalls.at(-1).arg));
 }
 
-function headingsFor(storeLocalDate) {
+function calendarFor(storeLocalDate) {
   const localElements = Object.fromEntries(ids.map((id) => [id, new Element()]));
   const localCalls = [];
   let success;
@@ -199,10 +205,14 @@ function headingsFor(storeLocalDate) {
   localCalls[0].success({ ok: true, storeName: '店', phoneHref: 'tel:1', timezone: 'Asia/Tokyo',
     storeLocalDate, availabilityHorizonEndDate: '2031-12-31', services: [{ id: 'standard', name: 'カット' }] });
   localCalls.at(-1).success({ ok: true, serviceId: 'standard', days: [] });
-  return monthHeadings(localElements);
+  return localElements;
 }
-assert.deepEqual(headingsFor('2030-08-11'), ['2030年8月', '2030年9月'],
+const boundaryCalendar = calendarFor('2030-08-11');
+boundaryCalendar.expand.onclick();
+assert.deepEqual(monthHeadings(boundaryCalendar), ['2030年8月', '2030年9月'],
   'a split exactly on the September boundary keeps the new month heading');
+assert.equal(boundaryCalendar.months.children[0].className, 'calendar-weeks',
+  'a real month boundary retains the normal month spacing');
 assert.deepEqual(initialRequestFor('2030-06-09'), { startDate: '2030-06-09', endDate: '2030-07-20', serviceId: 'standard' },
   'a Sunday anchors to itself across a month boundary');
 assert.deepEqual(initialRequestFor('2030-06-10'), { startDate: '2030-06-10', endDate: '2030-07-20', serviceId: 'standard' },
