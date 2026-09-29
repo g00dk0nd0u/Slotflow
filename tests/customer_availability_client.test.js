@@ -194,7 +194,7 @@ scrollPosition = 987;
 timedCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
   { date: '2030-01-02', status: '○', ranges: ['16:00 ～ 17:00'] }
 ] });
-assert.equal(scrollPosition, 345, 'background rendering restores the prior scroll position');
+assert.equal(scrollPosition, 987, 'background rendering preserves scrolling that occurred while the request was in flight');
 assert.equal(elements.ranges.children[0].textContent, '16:00 ～ 17:00',
   'the latest response replaces the selected date loading message');
 assert.equal(elements.expand.attributes['aria-expanded'], 'true', 'expanded state survives background rendering');
