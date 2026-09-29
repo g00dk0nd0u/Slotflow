@@ -123,42 +123,57 @@ assert.equal(elements.ranges.children[0].textContent, '10:30 ～ 11:00');
 elements.service.value = 'color';
 elements.service.onchange();
 assert.equal(elements.expand.hidden, true, 'expand control stays hidden while service availability reloads');
-assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'service change clears the old date immediately');
-assert.match(elements.ranges.innerHTML, /カレンダーから日付を選択してください/, 'service change clears old ranges immediately');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'service change preserves the selected date');
+assert.match(elements.ranges.innerHTML, /読み込み中…/, 'service change hides stale ranges behind a loading state');
 assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'short' },
   'service change reloads the same six-week window');
 assert.deepEqual(elements.option.children.map((item) => item.textContent), ['ショート', 'ロング'],
   'options are populated from the selected service');
-const staleOptionCall = calls.at(-1);
+respondWith([{ date: '2030-01-02', status: '△', ranges: ['12:00 ～ 12:30'] }]);
+assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'service response keeps the selected date');
+assert.equal(elements.ranges.children[0].textContent, '12:00 ～ 12:30',
+  'service response automatically refreshes the selected date ranges');
 
 elements.option.value = 'long';
 elements.option.onchange();
 assert.equal(elements.expand.hidden, true, 'expand control stays hidden while option availability reloads');
-const latestOptionCall = calls.at(-1);
+const staleOptionCall = calls.at(-1);
 assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'long' },
-  'option change clears and reloads availability with no client duration');
-assert.equal(elements.selectedDate.textContent, '日付を選択してください');
-staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
-  { date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }
+  'option change reloads availability with no client duration');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'option change preserves the selected date');
+assert.match(elements.ranges.innerHTML, /読み込み中…/, 'option change does not show stale times while loading');
+
+elements.option.value = 'short';
+elements.option.onchange();
+const latestOptionCall = calls.at(-1);
+staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long', days: [
+  { date: '2030-01-02', status: '△', ranges: ['15:00 ～ 15:30'] }
 ] });
 assert.equal(elements.months.textContent, '読み込み中…',
   'an older response for another option cannot overwrite the latest option selection');
-latestOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long', days: [
-  { date: '2030-01-04', status: '○', ranges: ['14:00 ～ 15:00'] }
+assert.match(elements.ranges.innerHTML, /読み込み中…/, 'a stale response cannot replace the detail loading state');
+latestOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+  { date: '2030-01-02', status: '×', ranges: [] }
 ] });
-assert.ok(allDateButtons().find((item) => item.attributes['aria-label'] === '2030-01-04 ○'),
+assert.ok(allDateButtons().find((item) => item.attributes['aria-label'] === '2030-01-02 ×'),
   'the latest option response is rendered');
+assert.match(allDateButtons().find((item) => item.attributes['aria-label'] === '2030-01-02 ×').className, /selected/,
+  'the selected date remains highlighted when it has zero startable times');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）');
+assert.match(elements.ranges.innerHTML, /開始可能時間はありません/,
+  'zero availability preserves the date and shows the existing no-availability message');
 assert.equal(elements.expand.hidden, false, 'successful reload shows the expand control again');
 
 elements.service.value = 'standard';
 elements.service.onchange();
 assert.equal(elements.expand.hidden, true, 'expand control is hidden for the next service reload');
-staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [{ date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }] });
+staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long', days: [{ date: '2030-01-02', status: '△', ranges: ['15:00 ～ 15:30'] }] });
 assert.equal(elements.months.textContent, '読み込み中…', 'stale service response remains ignored');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'the date remains selected until a terminal failure');
 const failedCall = calls.at(-1);
 failedCall.failureHandler(new Error('provider unavailable'));
 assert.equal(elements.expand.hidden, true, 'expand control stays hidden after provider failure handling');
-assert.equal(elements.selectedDate.textContent, '日付を選択してください');
+assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'a terminal failure clears the selected date');
 assert.match(elements.ranges.innerHTML, /表示できません/, 'provider failure never leaves old ranges visible');
 
 assert.equal(elements.phone.attributes['aria-disabled'], 'false');
