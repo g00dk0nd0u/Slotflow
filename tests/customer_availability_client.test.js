@@ -52,8 +52,14 @@ assert.equal(elements.expand.hidden, true, 'expand control stays hidden while in
 
 function allDateButtons() {
   return elements.months.children.flatMap((period) => period.children)
-    .flatMap((month) => month.children[2].children)
+    .flatMap((month) => month.children.find((child) => child.className === 'days').children)
     .filter((item) => item.attributes['aria-label']);
+}
+
+function monthHeadings(calendarElements) {
+  return calendarElements.months.children.flatMap((period) => period.children)
+    .flatMap((month) => month.children.filter((child) => child.className === 'month-title'))
+    .map((heading) => heading.textContent);
 }
 
 function respondWith(days) {
@@ -67,11 +73,12 @@ respondWith([
 ]);
 assert.equal(elements.months.children[0].hidden, false, 'the first three weeks are visible initially');
 assert.equal(elements.months.children[1].hidden, true, 'the later three weeks are hidden initially');
-assert.equal(elements.months.children[0].children.flatMap((month) => month.children[2].children)
+assert.equal(elements.months.children[0].children.flatMap((month) => month.children.find((child) => child.className === 'days').children)
   .filter((item) => item.attributes['aria-label']).length, 21, 'the initial calendar contains exactly three weeks');
-assert.deepEqual(elements.months.children.flatMap((period) => period.children).map((group) => group.children[0].textContent),
-  ['2029年12月', '2030年1月', '2030年1月', '2030年2月'],
-  '42 consecutive days are grouped under data-driven month headings across the two three-week periods');
+assert.deepEqual(monthHeadings(elements), ['2029年12月', '2030年1月', '2030年2月'],
+  'a split within January does not repeat its month heading');
+assert.equal(elements.months.children[1].children[0].children.filter((child) => child.className === 'week').length, 0,
+  'a split within a month does not repeat its weekday header');
 assert.deepEqual(elements.months.children[0].children[0].children[1].children.map((item) => item.textContent), ['日', '月', '火', '水', '木', '金', '土'],
   'weekday headers are Sunday-first');
 assert.equal(allDateButtons().length, 42, 'all six weeks remain rendered and available client-side');
@@ -96,6 +103,8 @@ assert.equal(elements.selectedDate.textContent, '1月22日（火）', 'collapsin
 elements.expand.onclick();
 assert.match(allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-22')).className, /selected/,
   'the selected date remains highlighted after re-expansion');
+assert.deepEqual(monthHeadings(elements), ['2029年12月', '2030年1月', '2030年2月'],
+  'collapse and re-expansion do not restore the duplicate month heading');
 elements.expand.onclick();
 const dateButton = allDateButtons().find((item) => item.attributes['aria-label'].startsWith('2030-01-02'));
 assert.ok(dateButton, 'available date button exists');
@@ -171,6 +180,29 @@ function initialRequestFor(storeLocalDate) {
     storeLocalDate, availabilityHorizonEndDate: '2031-12-31', services: [{ id: 'standard', name: 'カット' }] });
   return JSON.parse(JSON.stringify(localCalls.at(-1).arg));
 }
+
+function headingsFor(storeLocalDate) {
+  const localElements = Object.fromEntries(ids.map((id) => [id, new Element()]));
+  const localCalls = [];
+  let success;
+  const localRunner = {
+    withSuccessHandler(handler) { success = handler; return this; },
+    withFailureHandler() { return this; },
+    getAvailabilityOptions(arg) { localCalls.push({ method: 'getAvailabilityOptions', arg, success }); },
+    getAvailability(arg) { localCalls.push({ method: 'getAvailability', arg, success }); }
+  };
+  const localContext = { Date, document: {
+    getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
+  }, google: { script: { run: localRunner } } };
+  vm.createContext(localContext);
+  vm.runInContext(source, localContext);
+  localCalls[0].success({ ok: true, storeName: '店', phoneHref: 'tel:1', timezone: 'Asia/Tokyo',
+    storeLocalDate, availabilityHorizonEndDate: '2031-12-31', services: [{ id: 'standard', name: 'カット' }] });
+  localCalls.at(-1).success({ ok: true, serviceId: 'standard', days: [] });
+  return monthHeadings(localElements);
+}
+assert.deepEqual(headingsFor('2030-08-11'), ['2030年8月', '2030年9月'],
+  'a split exactly on the September boundary keeps the new month heading');
 assert.deepEqual(initialRequestFor('2030-06-09'), { startDate: '2030-06-09', endDate: '2030-07-20', serviceId: 'standard' },
   'a Sunday anchors to itself across a month boundary');
 assert.deepEqual(initialRequestFor('2030-06-10'), { startDate: '2030-06-10', endDate: '2030-07-20', serviceId: 'standard' },
