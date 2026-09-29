@@ -59,10 +59,14 @@ const legacyServices = config.services;
 config.services = [{ id: 'color', name: 'カラー', options: [
   { id: 'short', name: 'ショート', durationMinutes: 60 },
   { id: 'long', name: 'ロング', durationMinutes: 120 }
+] }, { id: 'treatment', name: 'トリートメント', options: [
+  { id: 'short', name: 'ショート', durationMinutes: 150 }
 ] }];
 const optionMetadata = harness().getAvailabilityOptions();
 assert.deepEqual(JSON.parse(JSON.stringify(optionMetadata.services)), [{ id: 'color', name: 'カラー', options: [
   { id: 'short', name: 'ショート' }, { id: 'long', name: 'ロング' }
+] }, { id: 'treatment', name: 'トリートメント', options: [
+  { id: 'short', name: 'ショート' }
 ] }], 'duration stays server-side while option metadata is exposed');
 assert.equal(harness().getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'color' }).error.code,
   'INVALID_REQUEST', 'option-bearing services require an option');
@@ -70,11 +74,18 @@ assert.equal(harness().getAvailability({ startDate: '2030-01-02', endDate: '2030
   'INVALID_REQUEST', 'unknown options fail closed');
 assert.equal(harness().getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'color', optionId: 'long', durationMinutes: 1 }).error.code,
   'INVALID_REQUEST', 'client-supplied duration is rejected');
-const optionResult = harness().getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'color', optionId: 'long' });
-assert.equal(optionResult.ok, true);
-assert.equal(optionResult.optionId, 'long');
-assert.deepEqual(JSON.parse(JSON.stringify(optionResult.days[0].ranges)), ['09:00 ～ 10:00'],
-  'selected option duration is resolved server-side');
+const shortColorResult = harness().getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'color', optionId: 'short' });
+const longColorResult = harness().getAvailability({ startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'color', optionId: 'long' });
+assert.deepEqual(JSON.parse(JSON.stringify(shortColorResult.days[0].ranges)), ['09:00 ～ 11:00']);
+assert.deepEqual(JSON.parse(JSON.stringify(longColorResult.days[0].ranges)), ['09:00 ～ 10:00'],
+  'different options on the same service resolve their own server-side durations');
+const shortTreatmentResult = harness().getAvailability({
+  startDate: '2030-01-02', endDate: '2030-01-02', serviceId: 'treatment', optionId: 'short'
+});
+assert.deepEqual(JSON.parse(JSON.stringify(shortTreatmentResult.days[0].ranges)), ['09:00 ～ 09:30'],
+  'the same option id is resolved within the selected service');
+assert.equal(shortTreatmentResult.serviceId, 'treatment');
+assert.equal(shortTreatmentResult.optionId, 'short');
 config.services = legacyServices;
 
 const occupied = [
