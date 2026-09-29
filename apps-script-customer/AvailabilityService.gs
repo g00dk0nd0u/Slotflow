@@ -12,7 +12,11 @@ function getAvailabilityOptions() {
       availabilityHorizonEndDate: Utilities.formatDate(
         new Date(now.getTime() + config.horizonDays * 24 * 60 * 60000), config.timezone, 'yyyy-MM-dd'),
       services: config.services.map(function (service) {
-        return { id: service.id, name: service.name, durationMinutes: service.durationMinutes };
+        var result = { id: service.id, name: service.name };
+        if (service.options) result.options = service.options.map(function (option) {
+          return { id: option.id, name: option.name };
+        });
+        return result;
       })
     };
   } catch (error) { return failure_('UNAVAILABLE', '空き状況を取得できません'); }
@@ -35,7 +39,7 @@ function getAvailability(request) {
   } catch (error) { return failure_('UNAVAILABLE', '空き時間を取得できません'); }
 }
 
-function availability_(startDate, endDate, service, config, now) {
+function availability_(startDate, endDate, selection, config, now) {
   var start = CustomerAvailabilityCore.localInstant(startDate, '00:00', config.timezone);
   var afterEnd = nextDate_(endDate, config.timezone);
   var end = CustomerAvailabilityCore.localInstant(afterEnd, '00:00', config.timezone);
@@ -44,13 +48,13 @@ function availability_(startDate, endDate, service, config, now) {
   while (date <= endDate) {
     var instant = CustomerAvailabilityCore.localInstant(date, '00:00', config.timezone);
     var weekday = Number(Utilities.formatDate(instant, config.timezone, 'u')) % 7;
-    var slots = CustomerAvailabilityCore.slots(date, config.businessHours[String(weekday)] || [], service,
+    var slots = CustomerAvailabilityCore.slots(date, config.businessHours[String(weekday)] || [], selection,
       events, config.timezone, config.slotStepMinutes, now);
     days.push({ date: date, status: CustomerAvailabilityCore.status(slots.length),
       ranges: CustomerAvailabilityCore.ranges(slots, config.timezone, config.slotStepMinutes) });
     date = nextDate_(date, config.timezone);
   }
-  return { ok: true, serviceId: service.id, days: days };
+  return { ok: true, serviceId: selection.id, optionId: selection.optionId, days: days };
 }
 
 function nextDate_(date, timezone) {
@@ -81,11 +85,21 @@ function validateAvailabilityRequest_(request, config, now) {
       !/^\d{4}-\d{2}-\d{2}$/.test(request.endDate || '') || request.startDate > request.endDate) invalid_();
   var service = config.services.filter(function (item) { return item.id === request.serviceId; })[0];
   if (!service) invalid_();
+  if (Object.prototype.hasOwnProperty.call(request, 'durationMinutes')) invalid_();
+  var selection;
+  if (service.options) {
+    var option = service.options.filter(function (item) { return item.id === request.optionId; })[0];
+    if (!option) invalid_();
+    selection = { id: service.id, optionId: option.id, durationMinutes: option.durationMinutes };
+  } else {
+    if (request.optionId !== undefined) invalid_();
+    selection = { id: service.id, durationMinutes: service.durationMinutes };
+  }
   var today = Utilities.formatDate(now, config.timezone, 'yyyy-MM-dd');
   var limit = Utilities.formatDate(new Date(now.getTime() + config.horizonDays * 24 * 60 * 60000), config.timezone, 'yyyy-MM-dd');
   if (request.startDate < today || request.endDate > limit ||
       Date.parse(request.endDate + 'T00:00:00Z') - Date.parse(request.startDate + 'T00:00:00Z') > 41 * 86400000) invalid_();
-  return { startDate: request.startDate, endDate: request.endDate, service: service };
+  return { startDate: request.startDate, endDate: request.endDate, service: selection };
 }
 
 function invalid_() { var error = new Error('Invalid request'); error.code = 'INVALID_REQUEST'; throw error; }

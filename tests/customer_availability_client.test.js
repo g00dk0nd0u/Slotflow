@@ -12,7 +12,7 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = String(value); }
 }
 
-const ids = ['service', 'style', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store'];
+const ids = ['service', 'option', 'months', 'ranges', 'selectedDate', 'error', 'phone', 'store'];
 const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
 const calls = [];
 let successHandler;
@@ -39,7 +39,7 @@ vm.runInContext(source, context);
 calls[0].successHandler({
   ok: true, storeName: 'Slotflow Salon', phoneHref: 'tel:+81312345678', timezone: 'Asia/Tokyo',
   storeLocalDate: '2030-01-01', availabilityHorizonEndDate: '2030-03-02',
-  services: [{ id: 'standard', name: 'カット', durationMinutes: 60 }, { id: 'short', name: '前髪', durationMinutes: 30 }]
+  services: [{ id: 'standard', name: 'カット' }, { id: 'color', name: 'カラー', options: [{ id: 'short', name: 'ショート' }, { id: 'long', name: 'ロング' }] }]
 });
 assert.equal(elements.store.textContent, 'Slotflow Salon', 'store name remains data-driven');
 assert.equal(source.includes('textContent=response.timezone'), false, 'raw IANA timezone is not displayed');
@@ -76,17 +76,36 @@ assert.match(allDateButtons().find((item) => item.attributes['aria-label'].start
   'selected date receives the highlight class');
 assert.equal(elements.ranges.children[0].textContent, '10:30 ～ 11:00');
 
-elements.service.value = 'short';
+elements.service.value = 'color';
 elements.service.onchange();
 assert.equal(elements.selectedDate.textContent, '日付を選択してください', 'service change clears the old date immediately');
 assert.match(elements.ranges.innerHTML, /カレンダーから日付を選択してください/, 'service change clears old ranges immediately');
-assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'short' },
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'short' },
   'service change reloads the same six-week window');
-const staleServiceCall = calls.at(-1);
+assert.deepEqual(elements.option.children.map((item) => item.textContent), ['ショート', 'ロング'],
+  'options are populated from the selected service');
+const staleOptionCall = calls.at(-1);
+
+elements.option.value = 'long';
+elements.option.onchange();
+const latestOptionCall = calls.at(-1);
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).arg)), { startDate: '2030-01-01', endDate: '2030-02-09', serviceId: 'color', optionId: 'long' },
+  'option change clears and reloads availability with no client duration');
+assert.equal(elements.selectedDate.textContent, '日付を選択してください');
+staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+  { date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }
+] });
+assert.equal(elements.months.textContent, '読み込み中…',
+  'an older response for another option cannot overwrite the latest option selection');
+latestOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'long', days: [
+  { date: '2030-01-04', status: '○', ranges: ['14:00 ～ 15:00'] }
+] });
+assert.ok(allDateButtons().find((item) => item.attributes['aria-label'] === '2030-01-04 ○'),
+  'the latest option response is rendered');
 
 elements.service.value = 'standard';
 elements.service.onchange();
-staleServiceCall.successHandler({ ok: true, serviceId: 'short', days: [{ date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }] });
+staleOptionCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [{ date: '2030-01-03', status: '△', ranges: ['12:00 ～ 12:30'] }] });
 assert.equal(elements.months.textContent, '読み込み中…', 'stale service response remains ignored');
 const failedCall = calls.at(-1);
 failedCall.failureHandler(new Error('provider unavailable'));
