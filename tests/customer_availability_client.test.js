@@ -16,6 +16,10 @@ const ids = ['service', 'option', 'months', 'ranges', 'selectedDate', 'error', '
 const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
 elements.expand.hidden = true;
 const calls = [];
+const intervals = [];
+const listeners = {};
+let now = Date.now();
+let scrollPosition = 345;
 let successHandler;
 let failureHandler;
 const runner = {
@@ -25,8 +29,12 @@ const runner = {
   getAvailability(arg) { calls.push({ method: 'getAvailability', arg, successHandler, failureHandler }); }
 };
 const context = {
-  Date,
+  Date: class extends Date { static now() { return now; } },
+  setInterval(handler, delay) { intervals.push({ handler, delay }); },
+  window: { get scrollY() { return scrollPosition; }, scrollTo(x, y) { assert.equal(x, 0); scrollPosition = y; } },
   document: {
+    hidden: false,
+    addEventListener(name, handler) { listeners[name] = handler; },
     getElementById(id) { return elements[id]; },
     createElement() { return new Element(); }
   },
@@ -71,6 +79,8 @@ respondWith([
   { date: '2030-01-03', status: '○', ranges: ['13:00 ～ 15:30', '17:00 ～ 17:30'] },
   { date: '2030-01-22', status: '○', ranges: ['11:00 ～ 12:00'] }
 ]);
+assert.equal(intervals.length, 1, 'one auto-refresh timer is installed after initialization');
+assert.equal(intervals[0].delay, 60000, 'availability auto-refreshes every 60 seconds');
 assert.equal(elements.months.children[0].hidden, false, 'the first three weeks are visible initially');
 assert.equal(elements.months.children[1].hidden, true, 'the later three weeks are hidden initially');
 assert.equal(elements.months.children[0].children.flatMap((month) => month.children.find((child) => child.className === 'days').children)
@@ -164,6 +174,43 @@ assert.match(elements.ranges.innerHTML, /開始可能時間はありません/,
   'zero availability preserves the date and shows the existing no-availability message');
 assert.equal(elements.expand.hidden, false, 'successful reload shows the expand control again');
 
+elements.expand.onclick();
+const calendarBeforeRefresh = elements.months.children;
+now += 60000;
+intervals[0].handler();
+assert.equal(calls.at(-1).method, 'getAvailability', 'the timer refreshes availability');
+assert.equal(elements.months.children, calendarBeforeRefresh,
+  'background loading keeps the current calendar rendered');
+assert.equal(elements.expand.attributes['aria-expanded'], 'true', 'background loading preserves expanded state');
+assert.equal(elements.service.value, 'color', 'background loading preserves the service');
+assert.equal(elements.option.value, 'short', 'background loading preserves the option');
+assert.equal(elements.selectedDate.textContent, '1月2日（水）', 'background loading preserves the selected date');
+assert.match(elements.ranges.innerHTML, /読み込み中…/,
+  'only the selected date ranges change to the loading message');
+const timedCall = calls.at(-1);
+listeners.visibilitychange();
+assert.equal(calls.at(-1), timedCall, 'a visibility event does not duplicate an in-flight timer refresh');
+scrollPosition = 987;
+timedCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+  { date: '2030-01-02', status: '○', ranges: ['16:00 ～ 17:00'] }
+] });
+assert.equal(scrollPosition, 345, 'background rendering restores the prior scroll position');
+assert.equal(elements.ranges.children[0].textContent, '16:00 ～ 17:00',
+  'the latest response replaces the selected date loading message');
+assert.equal(elements.expand.attributes['aria-expanded'], 'true', 'expanded state survives background rendering');
+
+context.document.hidden = true;
+now += 60000;
+intervals[0].handler();
+assert.equal(calls.at(-1), timedCall, 'the timer does not refresh a hidden page');
+context.document.hidden = false;
+listeners.visibilitychange();
+const visibleCall = calls.at(-1);
+assert.notEqual(visibleCall, timedCall, 'becoming visible refreshes immediately');
+visibleCall.successHandler({ ok: true, serviceId: 'color', optionId: 'short', days: [
+  { date: '2030-01-02', status: '○', ranges: ['16:00 ～ 17:00'] }
+] });
+
 elements.service.value = 'standard';
 elements.service.onchange();
 assert.equal(elements.expand.hidden, true, 'expand control is hidden for the next service reload');
@@ -192,8 +239,8 @@ function initialRequestFor(storeLocalDate) {
     getAvailabilityOptions(arg) { localCalls.push({ method: 'getAvailabilityOptions', arg, success }); },
     getAvailability(arg) { localCalls.push({ method: 'getAvailability', arg }); }
   };
-  const localContext = { Date, document: {
-    getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
+  const localContext = { Date, setInterval() {}, window: { scrollY: 0, scrollTo() {} }, document: {
+    hidden: false, addEventListener() {}, getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
   }, google: { script: { run: localRunner } } };
   vm.createContext(localContext);
   vm.runInContext(source, localContext);
@@ -212,8 +259,8 @@ function calendarFor(storeLocalDate) {
     getAvailabilityOptions(arg) { localCalls.push({ method: 'getAvailabilityOptions', arg, success }); },
     getAvailability(arg) { localCalls.push({ method: 'getAvailability', arg, success }); }
   };
-  const localContext = { Date, document: {
-    getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
+  const localContext = { Date, setInterval() {}, window: { scrollY: 0, scrollTo() {} }, document: {
+    hidden: false, addEventListener() {}, getElementById(id) { return localElements[id]; }, createElement() { return new Element(); }
   }, google: { script: { run: localRunner } } };
   vm.createContext(localContext);
   vm.runInContext(source, localContext);
