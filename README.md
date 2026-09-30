@@ -52,7 +52,7 @@ It does **not** collect customer name/contact and does **not** create, update or
 
 - authenticated, read-only owner dashboard with 30-second refresh and same-day cache;
 - customer availability page with service/options, a six-week window, automatic refresh and phone handoff;
-- separate owner and customer Apps Script deployments with least-privilege Calendar reads;
+- separate owner and customer Apps Script deployments with read-only Calendar scopes;
 - normal HTTPS-link setup for opening the customer page from a LINE Official Account; smartphone acceptance remains a pilot check.
 
 Start here:

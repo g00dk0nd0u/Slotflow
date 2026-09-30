@@ -7,7 +7,7 @@ This page distinguishes the implemented customer MVP from optional future work. 
 - A private owner Apps Script deployment reads Calendar and renders an Android-friendly schedule dashboard.
 - A separate customer Apps Script deployment derives privacy-minimized availability from business hours, service duration and Calendar occupancy.
 - Services may use one duration or a list of options with their own durations.
-- The customer calendar covers six Sunday-first weeks, collapses later weeks initially, and refreshes automatically while preserving a valid selection.
+- The customer calendar covers six Sunday-first weeks: three are initially visible and three can be revealed or collapsed. It refreshes while visible and on visibility return, rolls its store-local window across midnight, and preserves valid selection/scroll state during background refresh.
 - Reservations are confirmed by phone and entered into Google Calendar by the manager.
 - A LINE Official Account rich-menu or profile link may open the same customer page; LINE setup is external to this repository.
 - Regression tests and CI cover schedule derivation, availability, configuration, privacy-sensitive response shaping and client refresh behavior.
