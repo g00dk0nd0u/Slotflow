@@ -59,6 +59,7 @@ Cover:
 - changing service/option/date clears stale selected times;
 - the option selector is populated from the selected service and stale service/option responses cannot overwrite it;
 - phone CTA uses the configured `tel:` destination;
+- the customer page refreshes while visible and on visibility return without losing a still-valid selection or scroll position;
 - no customer name/contact or online-confirmation form exists;
 - no customer code path can insert/update/delete Calendar events.
 

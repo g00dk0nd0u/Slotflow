@@ -1,4 +1,4 @@
-# Android dashboard pilot
+# Android owner dashboard
 
 The owner dashboard is a single read-only screen in the same Apps Script project as the
 Calendar adapter. `doGet()` serves HTML only. After the shell loads, the page calls

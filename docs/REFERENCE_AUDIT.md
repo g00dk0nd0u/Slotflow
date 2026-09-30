@@ -1,5 +1,7 @@
 # ContextLab/scheduler source audit
 
+> **Historical research:** this audit records early evaluation of a reference repository. It is retained for decision context, but its issue assignments and proposed implementation work are not current Slotflow guidance. See [Architecture](ARCHITECTURE.md), [Architecture decisions](DECISIONS.md), and [Current scope and next steps](ROADMAP.md) for the maintained product direction.
+
 Reference: [`ContextLab/scheduler`](https://github.com/ContextLab/scheduler)<br>
 Audited `main`: [`c92dec793039fa5a365162029041bdbd26088901`](https://github.com/ContextLab/scheduler/tree/c92dec793039fa5a365162029041bdbd26088901) (2026-08-16)<br>
 History specifically inspected: `c92dec7` (Advanced Calendar service declaration) and

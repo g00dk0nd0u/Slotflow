@@ -48,25 +48,26 @@ The MVP customer page is read-only:
 
 It does **not** collect customer name/contact and does **not** create, update or delete Calendar events.
 
-## Current status
+## Implemented MVP
 
-- Reference repository audit: complete
-- Calendar read adapter: implemented
-- Authenticated owner Apps Script dashboard: implemented
-- Customer read-only availability and phone handoff: implemented
+- authenticated, read-only owner dashboard with 30-second refresh and same-day cache;
+- customer availability page with service/options, a six-week window, automatic refresh and phone handoff;
+- separate owner and customer Apps Script deployments with read-only Calendar scopes;
+- normal HTTPS-link setup for opening the customer page from a LINE Official Account; smartphone acceptance remains a pilot check.
 
 Start here:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Architecture decisions](docs/DECISIONS.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Issue plan](docs/ISSUE_PLAN.md)
+- [Current scope and next steps](docs/ROADMAP.md)
+- [Current issue map](docs/ISSUE_PLAN.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Calendar read adapter operations](docs/CALENDAR_READ_ADAPTER.md)
-- [Android dashboard pilot](docs/DASHBOARD.md)
+- [Android owner dashboard](docs/DASHBOARD.md)
 - [Customer availability](docs/CUSTOMER_AVAILABILITY.md)
+- [LINE entry setup](docs/LINE_ENTRY.md)
+- [Pilot and future managed onboarding](docs/ONBOARDING.md)
 - [Reference repository audit](docs/REFERENCE_AUDIT.md)
-- [MVP roadmap issue #1](https://github.com/g00dk0nd0u/Slotflow/issues/1)
 
 ## Scope
 
@@ -77,7 +78,7 @@ First release:
 - owner Android tablet display
 - customer read-only availability display
 - phone reservation handoff
-- LINE entry point to the same availability page later
+- LINE HTTPS-link entry setup, pending smartphone pilot verification
 
 Explicitly deferred:
 

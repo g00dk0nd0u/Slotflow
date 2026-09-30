@@ -1,54 +1,21 @@
-# Issue Plan
+# Current issue map
 
-Slotflow follows a Calendar-first, read-only customer MVP.
+This is a concise map of the issues that define or refine the customer MVP. “Implemented” means the repository behavior has been merged; it does not by itself mean that deployment-specific or smartphone acceptance has completed.
 
-## Product rule
+| Issue | Current role | Repository status | Live verification |
+| --- | --- | --- | --- |
+| #7 | Customer read-only availability and phone handoff | Implemented and merged | Deployment configuration and target-device checks remain store-specific |
+| #8 | LINE Official Account entry to the availability page | Normal HTTPS-link approach and setup guidance are merged; no LINE runtime integration is required | Smartphone LINE rich-menu, in-app browser and phone-handoff acceptance remain pending for the pilot |
+| #11 | Hardening and first-store pilot | Repository safeguards and test coverage are present; this issue remains the umbrella for operational validation | Quota, permissions, privacy, device behavior and first-store operation require live verification |
+| #29 | Configurable service × option duration and availability model | Implemented, merged and deployed with test configuration | Compare short/medium/long options within the same service, then replace the test values with the real pilot duration matrix |
+| #32 | Expanded-calendar duplicate same-month heading and spacing correction | Implemented and merged | Expanded-calendar visual verification in the target browser remains pending |
+| #34 | Preserve a valid selected date during availability reloads | Implemented and merged | Covered by automated client tests |
+| #36 | Automatic customer availability refresh, including visibility return and day rollover | Implemented and merged | Covered by automated client tests; deployed timing/provider behavior remains part of pilot observation |
+| #38 | Consolidate repository documentation after customer MVP stabilization | Documentation cleanup is in progress in PR #39 | Documentation review is the remaining acceptance step |
+| #40 | Narrow the owner deployment's current `calendar.readonly` OAuth scope | Not part of PR #39; the owner runtime remains unchanged | Reauthorization and owner-dashboard verification belong to #40 |
 
-The store manager operates the real schedule entirely in Google Calendar. Slotflow has two read surfaces: an owner tablet schedule and a customer availability page. Actual reservations are confirmed by phone and entered by the manager in Google Calendar.
+## Reading the map
 
-## Order
-
-1. **#2 — Audit ContextLab/scheduler before reusing any implementation**  
-   Complete. Reference material only.
-
-2. **#5 — Implement Google Calendar read adapter for the owner dashboard**  
-   Complete.
-
-3. **#6 — Build instant-access Android Calendar dashboard PWA**  
-   Complete.
-
-4. **#4 — Add lightweight CI/tests for Calendar read + availability display**  
-   Cover both owner display and customer read-only availability.
-
-5. **#7 — Build customer read-only availability page with phone handoff**  
-   Service -> ○/△/× -> startable times -> 電話で確認する. No Calendar writes.
-
-6. **#8 — Add LINE entry point to the read-only availability page**  
-   Rich menu/profile link on top of #7.
-
-7. **#10 — Plan zero-friction Google Calendar read onboarding for non-technical store owners**
-
-8. **#11 — Hardening, quota validation and first-store pilot**
-
-9. **#9 — Conversational LINE availability**  
-   Deferred until chat automation is proven useful.
-
-## Superseded
-
-**#3 — customer booking write safeguards** is not part of the MVP. It remains closed/not planned. A future online-booking product would require an explicit new product decision.
-
-## Critical path
-
-Owner foundation:
-
-`#5 + #6`
-
-Then safety net and customer availability:
-
-`#4 + #7`
-
-Then distribution/productization:
-
-`#8 -> #10 -> #11`
-
-The MVP does **not** depend on Calendar writes from customers, LockService, idempotent write tokens, a booking ledger or transaction state machine.
+- Current product and operational guidance lives in [Architecture](ARCHITECTURE.md), [Current scope and next steps](ROADMAP.md), and the deployment-specific guides.
+- Issue status never substitutes for the smartphone and store-environment checks in [LINE entry](LINE_ENTRY.md) and [Android owner dashboard](DASHBOARD.md).
+- Historical issue assignments in [Reference repository audit](REFERENCE_AUDIT.md) are research context, not this map's current plan.

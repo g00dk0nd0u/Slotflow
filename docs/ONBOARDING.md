@@ -1,6 +1,6 @@
 # Google Calendar onboarding
 
-This document defines the onboarding path for Slotflow from the current developer-assisted pilot to a managed service that a non-technical store owner can connect without creating Google Cloud credentials or deploying Apps Script.
+This document separates the implemented, developer-assisted Apps Script setup from a possible managed service. The managed service is future product guidance, not part of the deployed MVP.
 
 ## Product constraint
 
@@ -180,15 +180,3 @@ When it is needed, use a conventional server-side HTTPS runtime that supports:
 A Google-hosted serverless runtime such as Cloud Run is a natural first candidate because the product already depends on Google Calendar, but the architecture should not depend on Cloud Run-specific behavior.
 
 No separate appointment database is required. A small store/config/auth database is sufficient; Google Calendar remains the schedule source of truth.
-
-## Acceptance criteria for Issue #10
-
-Issue #10 is complete when:
-
-- the pilot setup path is documented;
-- the managed owner journey is documented;
-- minimum OAuth scopes are explicit;
-- token/security boundaries are explicit;
-- disconnect/reconnect/calendar reselection are defined;
-- migration from Script Properties to managed configuration is defined;
-- no design requires customer Calendar writes or per-store OAuth credential creation.

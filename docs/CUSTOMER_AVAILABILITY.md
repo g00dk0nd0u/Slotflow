@@ -58,15 +58,16 @@ The target mobile UI is intentionally small:
 
 - brand/store header;
 - service selection and a dynamically populated option selector;
-- Sunday-first calendar showing six full weeks (42 days) from the current store-local week;
+- Sunday-first calendar covering six full weeks (42 days) from the current store-local week;
+- the first three weeks are visible initially; **もっと見る** reveals the later three weeks and **閉じる** collapses them again;
 - past dates remain visible but disabled and are never requested from the server;
 - dynamic month headings when the six-week window crosses month boundaries;
 - ○ / △ / × availability;
 - selected-date startable times/ranges;
-- `tel:` CTA labeled **電話で確認する**.
+- preservation of the selected date across service or option changes while that date remains valid;
+- `tel:` CTA labeled **電話で確認する**;
+- background refresh every 60 seconds while visible and an immediate refresh when the page becomes visible again;
+- refresh of the store-local date and window metadata across midnight, so polling continues with a valid Sunday-first window;
+- preservation of current state and scroll position during background refresh when still valid.
 
 There is no customer account, name/contact form, online confirmation button, cancellation/reschedule flow or customer-side Calendar mutation.
-
-## PR #19 cleanup
-
-PR #19 introduced an online Calendar-write experiment based on a superseded product assumption. Issue #7 owns the corrective change: retain useful read-only availability logic and remove write scope, `createBooking`, customer forms, LockService/idempotency/fingerprint logic and Calendar insert behavior.

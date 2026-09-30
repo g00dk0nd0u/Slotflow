@@ -1,67 +1,34 @@
-# Slotflow Roadmap
+# Current scope and next steps
 
-## Phase 0 — foundation audit
-Issue: #2
+This page distinguishes the implemented customer MVP from optional future work. Google Calendar remains the operational schedule; Slotflow only reads it.
 
-Status: **complete**.
+## Implemented customer MVP
 
-## Phase 1 — owner Calendar companion
-Issues: #5, #6, #4
+- A private owner Apps Script deployment reads Calendar and renders an Android-friendly schedule dashboard.
+- A separate customer Apps Script deployment derives privacy-minimized availability from business hours, service duration and Calendar occupancy.
+- Services may use one duration or a list of options with their own durations.
+- The customer calendar covers six Sunday-first weeks: three are initially visible and three can be revealed or collapsed. It refreshes while visible and on visibility return, rolls its store-local window across midnight, and preserves valid selection/scroll state during background refresh.
+- Reservations are confirmed by phone and entered into Google Calendar by the manager.
+- A LINE Official Account rich-menu or profile link may open the same customer page; LINE setup is external to this repository.
+- Regression tests and CI cover schedule derivation, availability, configuration, privacy-sensitive response shaping and client refresh behavior.
 
-- read the manager's Google Calendar;
-- normalize schedule data;
-- show next appointment, today's schedule and free gaps;
-- cache last successful data and refresh in the background;
-- add lightweight regression tests/CI.
+## Pilot operations
 
-Exit condition: the manager can keep operating entirely in Google Calendar and use Slotflow as a clearer always-ready display.
+- Keep the owner deployment authenticated and restricted to intended owner accounts.
+- Expose only the separate customer deployment, whose responses contain derived availability rather than event details.
+- Validate the configured store timezone, business hours, services, phone number and Calendar permissions.
+- Verify the deployed pages on the target Android tablet, mobile browser and LINE in-app browser.
+- Monitor Calendar API quotas and treat provider/configuration failures as unavailable, never as free time.
 
-## Phase 2 — customer read-only availability
-Issue: #7
+## Future product decisions
 
-- calculate availability from business hours minus Calendar occupancy;
-- respect selected service duration;
-- show compact calendar status such as ○ / △ / ×;
-- show selected-date startable times/ranges;
-- provide a clear **電話で確認する** `tel:` action;
-- expose no private appointment/customer data;
-- do not create Calendar events from the customer UI.
+These are not implemented commitments:
 
-Exit condition: a customer can check availability, call the store, and the manager can enter the confirmed reservation in Google Calendar; that Calendar change removes the occupied time from availability on refresh.
+- managed onboarding with central OAuth, calendar selection and store configuration;
+- a separately hosted installable/offline owner application;
+- conversational LINE automation;
+- customer online booking or Calendar writes;
+- multi-location or multi-staff resource scheduling;
+- payments, POS, inventory, payroll or CRM features.
 
-## Phase 3 — LINE entry
-Issue: #8
-
-- LINE Official Account rich menu/profile link;
-- open the same read-only availability page in one tap;
-- no booking webhook required.
-
-Issue #9 remains deferred unless conversational availability is genuinely useful.
-
-## Phase 4 — onboarding/productization
-Issue: #10
-
-- keep developer-assisted pilot setup separate from managed SaaS onboarding;
-- target owner experience: Google sign-in/consent, calendar selection and basic store configuration;
-- prefer least-privilege Calendar read access for the MVP.
-
-## Phase 5 — hardening and first-store pilot
-Issue: #11
-
-- Calendar/API quota checks;
-- offline/stale owner-dashboard behavior;
-- customer availability privacy review;
-- phone-handoff validation;
-- first real single-store pilot.
-
-## Deferred until an explicit product decision requires it
-
-- customer online booking / Calendar writes;
-- LockService/idempotent write flow;
-- mandatory Google Sheets booking ledger;
-- booking lifecycle/reconciliation;
-- owner-side duplicate booking CRUD;
-- conversational LINE booking bot;
-- multi-location/franchise;
-- multi-staff resource scheduling;
-- payment/POS/inventory/payroll/full CRM.
+Any customer write path would require a new product and security design, including concurrency, idempotency, lifecycle and reconciliation decisions. It must not be inferred from the current read-only MVP.

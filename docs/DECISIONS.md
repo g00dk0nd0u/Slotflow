@@ -50,3 +50,6 @@ If required Calendar data cannot be read, Slotflow distinguishes that failure fr
 
 ## ADR-017: Store timezone and server rules are authoritative
 Service duration, business hours and store timezone are enforced server-side when deriving availability. Client/device timezone is not authoritative.
+
+## ADR-018: Service and option durations are server-authoritative
+Each service has either one configured duration or a non-empty set of options with configured durations. The server resolves the duration from the validated service and option identifiers; the client cannot submit or override an arbitrary duration. Invalid, missing or mismatched selections fail closed.
