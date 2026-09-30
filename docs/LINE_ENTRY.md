@@ -69,9 +69,9 @@ For the MVP:
 
 The linked page is the same read-only availability surface used by normal mobile browsers.
 
-## Manual verification still required
+## Deployment verification
 
-Repository work alone cannot prove real LINE-client behavior. Before closing Issue #8, verify on a smartphone with the pilot LINE Official Account:
+Repository checks cannot prove real LINE-client behavior. For each deployment, verify on a smartphone with the store's LINE Official Account:
 
 - the rich menu is visible;
 - one tap on `空き状況を見る` opens the deployed Slotflow availability page;
@@ -83,7 +83,7 @@ Repository work alone cannot prove real LINE-client behavior. Before closing Iss
 
 If an in-app-browser problem is found, fix that concrete compatibility issue first. Add LIFF only if a demonstrated requirement cannot be solved by the normal web page.
 
-## Not part of this issue
+## Out of scope
 
 - online reservation confirmation;
 - customer Calendar writes;

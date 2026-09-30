@@ -1,6 +1,6 @@
 # Calendar read adapter operations
 
-Issue #5 adds a read-only, server-side Google Apps Script adapter. Google Calendar remains
+The owner deployment includes a read-only, server-side Google Apps Script adapter. Google Calendar remains
 the operational source of truth: owner add, move, delete, block and closure operations are
 performed in Calendar and appear on the next successful read. There is no booking ledger.
 
