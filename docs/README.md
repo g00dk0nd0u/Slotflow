@@ -10,6 +10,7 @@
 - [LINE entry setup](LINE_ENTRY.md)
 - [Test strategy](TEST_STRATEGY.md)
 - [Current scope and next steps](ROADMAP.md)
+- [Current issue map](ISSUE_PLAN.md)
 
 ## Future productization
 

@@ -53,13 +53,14 @@ It does **not** collect customer name/contact and does **not** create, update or
 - authenticated, read-only owner dashboard with 30-second refresh and same-day cache;
 - customer availability page with service/options, a six-week window, automatic refresh and phone handoff;
 - separate owner and customer Apps Script deployments with least-privilege Calendar reads;
-- LINE Official Account entry through a normal link to the customer page (configured outside this repository).
+- normal HTTPS-link setup for opening the customer page from a LINE Official Account; smartphone acceptance remains a pilot check.
 
 Start here:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Architecture decisions](docs/DECISIONS.md)
 - [Current scope and next steps](docs/ROADMAP.md)
+- [Current issue map](docs/ISSUE_PLAN.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Calendar read adapter operations](docs/CALENDAR_READ_ADAPTER.md)
 - [Android owner dashboard](docs/DASHBOARD.md)
@@ -77,7 +78,7 @@ First release:
 - owner Android tablet display
 - customer read-only availability display
 - phone reservation handoff
-- LINE entry point to the same availability page
+- LINE HTTPS-link entry setup, pending smartphone pilot verification
 
 Explicitly deferred:
 
