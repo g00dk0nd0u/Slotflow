@@ -12,7 +12,7 @@ This is a concise map of the issues that define or refine the customer MVP. “I
 | #34 | Preserve a valid selected date during availability reloads | Implemented and merged | Covered by automated client tests |
 | #36 | Automatic customer availability refresh, including visibility return and day rollover | Implemented and merged | Covered by automated client tests; deployed timing/provider behavior remains part of pilot observation |
 | #38 | Consolidate repository documentation after customer MVP stabilization | Documentation cleanup is in progress in PR #39 | Documentation review is the remaining acceptance step |
-| #40 | Narrow the owner deployment's current `calendar.readonly` OAuth scope | Not part of PR #39; the owner runtime remains unchanged | Reauthorization and owner-dashboard verification belong to #40 |
+| #40 | Narrow the owner deployment's Calendar OAuth scope | Implemented with `calendar.events.readonly`; owner runtime behavior is unchanged | Live reauthorization and owner-dashboard verification remain after deployment |
 
 ## Reading the map
 
